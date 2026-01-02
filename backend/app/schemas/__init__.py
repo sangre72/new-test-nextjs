@@ -17,6 +17,17 @@ from app.schemas.shared import (
     ListResponse,
     ErrorResponse,
 )
+from app.schemas.category import (
+    CategoryCreate,
+    CategoryUpdate,
+    CategoryResponse,
+    CategoryWithChildren,
+    CategoryReorder,
+    CategoryListResponse,
+    CategoryFlatResponse,
+    CategoryDetailResponse,
+    SuccessMessageResponse,
+)
 
 __all__ = [
     "TenantCreate",
@@ -35,4 +46,13 @@ __all__ = [
     "SuccessResponse",
     "ListResponse",
     "ErrorResponse",
+    "CategoryCreate",
+    "CategoryUpdate",
+    "CategoryResponse",
+    "CategoryWithChildren",
+    "CategoryReorder",
+    "CategoryListResponse",
+    "CategoryFlatResponse",
+    "CategoryDetailResponse",
+    "SuccessMessageResponse",
 ]

@@ -8,6 +8,7 @@ from app.models.shared import (
     GroupTypeEnum,
     RoleScopeEnum,
 )
+from app.models.category import Category
 
 __all__ = [
     "Tenant",
@@ -17,4 +18,5 @@ __all__ = [
     "UserRole",
     "GroupTypeEnum",
     "RoleScopeEnum",
+    "Category",
 ]
