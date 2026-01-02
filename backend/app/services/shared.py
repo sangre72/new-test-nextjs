@@ -7,9 +7,10 @@ Shared Services - 공유 모델의 비즈니스 로직
 - RoleService
 """
 
+import json
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from app.models.shared import (
     Tenant,
@@ -54,25 +55,59 @@ class TenantService:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def get_tenant_by_domain(
+        session: AsyncSession,
+        domain: str,
+    ) -> Optional[Tenant]:
+        """도메인으로 테넌트 조회 (서브도메인 또는 커스텀 도메인)"""
+        # 서브도메인으로 먼저 찾기
+        result = await session.execute(
+            select(Tenant).where(
+                Tenant.subdomain == domain,
+                Tenant.is_deleted == False,
+                Tenant.is_active == True,
+            )
+        )
+        tenant = result.scalar_one_or_none()
+
+        if tenant:
+            return tenant
+
+        # 커스텀 도메인으로 찾기
+        result = await session.execute(
+            select(Tenant).where(
+                Tenant.domain == domain,
+                Tenant.is_deleted == False,
+                Tenant.is_active == True,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def list_tenants(
         session: AsyncSession,
         skip: int = 0,
         limit: int = 100,
+        is_active: Optional[bool] = None,
     ) -> tuple[List[Tenant], int]:
         """모든 테넌트 조회"""
+        # 쿼리 구성
+        query = select(Tenant).where(Tenant.is_deleted == False)
+
+        if is_active is not None:
+            query = query.where(Tenant.is_active == is_active)
+
         # 총 개수
-        count_result = await session.execute(
-            select(func.count(Tenant.id)).where(Tenant.is_deleted == False)
-        )
+        count_query = select(func.count(Tenant.id)).where(Tenant.is_deleted == False)
+        if is_active is not None:
+            count_query = count_query.where(Tenant.is_active == is_active)
+
+        count_result = await session.execute(count_query)
         total = count_result.scalar()
 
         # 페이징된 결과
         result = await session.execute(
-            select(Tenant)
-            .where(Tenant.is_deleted == False)
-            .order_by(Tenant.created_at.desc())
-            .offset(skip)
-            .limit(limit)
+            query.order_by(Tenant.created_at.desc()).offset(skip).limit(limit)
         )
         tenants = result.scalars().all()
 
@@ -88,9 +123,15 @@ class TenantService:
         subdomain: Optional[str] = None,
         admin_email: Optional[str] = None,
         admin_name: Optional[str] = None,
+        settings: Optional[Dict[str, Any]] = None,
         created_by: str = "system",
     ) -> Tenant:
         """새 테넌트 생성"""
+        # settings를 JSON으로 변환
+        settings_json = None
+        if settings:
+            settings_json = settings
+
         tenant = Tenant(
             tenant_code=tenant_code,
             tenant_name=tenant_name,
@@ -99,12 +140,115 @@ class TenantService:
             subdomain=subdomain,
             admin_email=admin_email,
             admin_name=admin_name,
+            settings=settings_json,
             created_by=created_by,
         )
         session.add(tenant)
         await session.commit()
         await session.refresh(tenant)
         return tenant
+
+    @staticmethod
+    async def update_tenant(
+        session: AsyncSession,
+        tenant_id: int,
+        tenant_name: Optional[str] = None,
+        description: Optional[str] = None,
+        domain: Optional[str] = None,
+        subdomain: Optional[str] = None,
+        admin_email: Optional[str] = None,
+        admin_name: Optional[str] = None,
+        settings: Optional[Dict[str, Any]] = None,
+        is_active: Optional[bool] = None,
+        updated_by: str = "system",
+    ) -> Optional[Tenant]:
+        """테넌트 수정"""
+        tenant = await TenantService.get_tenant_by_id(session, tenant_id)
+
+        if not tenant:
+            return None
+
+        if tenant_name is not None:
+            tenant.tenant_name = tenant_name
+        if description is not None:
+            tenant.description = description
+        if domain is not None:
+            tenant.domain = domain
+        if subdomain is not None:
+            tenant.subdomain = subdomain
+        if admin_email is not None:
+            tenant.admin_email = admin_email
+        if admin_name is not None:
+            tenant.admin_name = admin_name
+        if settings is not None:
+            tenant.settings = settings
+        if is_active is not None:
+            tenant.is_active = is_active
+
+        tenant.updated_by = updated_by
+
+        await session.commit()
+        await session.refresh(tenant)
+        return tenant
+
+    @staticmethod
+    async def delete_tenant(
+        session: AsyncSession,
+        tenant_id: int,
+        updated_by: str = "system",
+    ) -> bool:
+        """테넌트 소프트 삭제 (기본 테넌트는 삭제 불가)"""
+        tenant = await TenantService.get_tenant_by_id(session, tenant_id)
+
+        if not tenant:
+            return False
+
+        # 기본 테넌트는 삭제 불가
+        if tenant.tenant_code == "default":
+            return False
+
+        tenant.is_deleted = True
+        tenant.updated_by = updated_by
+
+        await session.commit()
+        return True
+
+    @staticmethod
+    async def get_tenant_settings(
+        session: AsyncSession,
+        tenant_id: int,
+    ) -> Optional[Dict[str, Any]]:
+        """테넌트의 설정 조회"""
+        tenant = await TenantService.get_tenant_by_id(session, tenant_id)
+
+        if not tenant:
+            return None
+
+        return tenant.settings or {}
+
+    @staticmethod
+    async def update_tenant_settings(
+        session: AsyncSession,
+        tenant_id: int,
+        settings: Dict[str, Any],
+        updated_by: str = "system",
+    ) -> Optional[Dict[str, Any]]:
+        """테넌트의 설정 업데이트 (부분 업데이트)"""
+        tenant = await TenantService.get_tenant_by_id(session, tenant_id)
+
+        if not tenant:
+            return None
+
+        # 기존 설정 유지하고 새 설정으로 병합
+        current_settings = tenant.settings or {}
+        updated_settings = {**current_settings, **settings}
+
+        tenant.settings = updated_settings
+        tenant.updated_by = updated_by
+
+        await session.commit()
+        await session.refresh(tenant)
+        return tenant.settings
 
 
 class UserGroupService:
@@ -336,11 +480,10 @@ class RoleService:
     ) -> bool:
         """사용자가 관리자인지 확인"""
         result = await session.execute(
-            select(func.count(UserRole.id)).where(
-                UserRole.user_id == user_id,
-            )
+            select(func.count(UserRole.id))
             .join(Role)
             .where(
+                UserRole.user_id == user_id,
                 Role.role_scope == RoleScopeEnum.ADMIN,
                 Role.is_deleted == False,
             )

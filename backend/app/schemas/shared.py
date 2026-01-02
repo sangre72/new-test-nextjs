@@ -5,13 +5,14 @@ Shared Schemas (Pydantic v2)
 
 포함:
 - TenantSchema
+- TenantSettingsSchema
 - UserGroupSchema
 - RoleSchema
 """
 
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from enum import Enum
 
 
@@ -34,6 +35,33 @@ class RoleScopeEnum(str, Enum):
 # ============================================================
 # Tenant Schemas
 # ============================================================
+class TenantSettings(BaseModel):
+    """테넌트 설정"""
+    theme: Optional[str] = Field(None, max_length=50)  # 테마 (default, dark, light 등)
+    logo: Optional[str] = Field(None, max_length=255)  # 로고 URL
+    favicon: Optional[str] = Field(None, max_length=255)  # 파비콘 URL
+    language: Optional[str] = Field("ko", max_length=10)  # 언어 (ko, en, ja, zh)
+    timezone: Optional[str] = Field("Asia/Seoul", max_length=50)  # 시간대
+    primary_color: Optional[str] = Field(None, max_length=20)  # 기본 색상
+    company_name: Optional[str] = Field(None, max_length=100)  # 회사명
+    contact_email: Optional[str] = Field(None, max_length=255)  # 연락처 이메일
+    contact_phone: Optional[str] = Field(None, max_length=20)  # 연락처 전화
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "theme": "default",
+                "logo": "/uploads/logo.png",
+                "favicon": "/uploads/favicon.ico",
+                "language": "ko",
+                "timezone": "Asia/Seoul",
+                "primary_color": "#1976d2",
+                "company_name": "회사명"
+            }
+        }
+    )
+
+
 class TenantCreate(BaseModel):
     """테넌트 생성 요청"""
     tenant_code: str = Field(..., min_length=1, max_length=50)
@@ -43,17 +71,23 @@ class TenantCreate(BaseModel):
     subdomain: Optional[str] = Field(None, max_length=100)
     admin_email: Optional[str] = Field(None, max_length=255)
     admin_name: Optional[str] = Field(None, max_length=100)
+    settings: Optional[TenantSettings] = None
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "tenant_code": "siteA",
+                "tenant_code": "site_a",
                 "tenant_name": "사이트 A",
                 "description": "쇼핑몰",
                 "domain": "siteA.com",
                 "subdomain": "siteA",
                 "admin_email": "admin@siteA.com",
                 "admin_name": "관리자",
+                "settings": {
+                    "theme": "default",
+                    "logo": "/uploads/logo.png",
+                    "language": "ko"
+                }
             }
         }
     )
@@ -67,6 +101,8 @@ class TenantUpdate(BaseModel):
     subdomain: Optional[str] = Field(None, max_length=100)
     admin_email: Optional[str] = Field(None, max_length=255)
     admin_name: Optional[str] = Field(None, max_length=100)
+    settings: Optional[TenantSettings] = None
+    is_active: Optional[bool] = None
 
 
 class TenantResponse(BaseModel):
@@ -79,6 +115,7 @@ class TenantResponse(BaseModel):
     subdomain: Optional[str]
     admin_email: Optional[str]
     admin_name: Optional[str]
+    settings: Optional[Dict[str, Any]]
     created_at: datetime
     created_by: Optional[str]
     updated_at: datetime
