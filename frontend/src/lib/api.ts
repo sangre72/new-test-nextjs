@@ -15,9 +15,9 @@ export const api = axios.create({
 // Request interceptor - Add auth token
 api.interceptors.request.use(
   (config) => {
-    // Get token from localStorage
+    // Get token from sessionStorage (Security: 탭 닫으면 자동 삭제)
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('auth_token')
+      const token = sessionStorage.getItem('auth_token')
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
       }
@@ -38,7 +38,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       // Unauthorized - clear token and redirect to login
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('auth_token')
+        sessionStorage.removeItem('auth_token')
         window.location.href = '/login'
       }
     }

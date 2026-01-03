@@ -140,7 +140,7 @@ class Tenant(Base, AuditMixin):
     users = relationship("User", back_populates="tenant", cascade="all, delete-orphan")
     user_groups = relationship("UserGroup", back_populates="tenant", cascade="all, delete-orphan")
     menus = relationship("Menu", back_populates="tenant", cascade="all, delete-orphan")
-    boards = relationship("Board", back_populates="tenant", cascade="all, delete-orphan")
+    boards = relationship("BoardExtended", back_populates="tenant", cascade="all, delete-orphan")
 
     # Indexes
     __table_args__ = (
@@ -523,10 +523,35 @@ class RolePermission(Base):
         return f"<RolePermission(role_id={self.role_id}, permission_id={self.permission_id})>"
 
 
+class MenuTypeEnum(str, Enum):
+    """Menu type enumeration"""
+    USER = "user"
+    SITE = "site"
+    ADMIN = "admin"
+
+
+class MenuPermissionTypeEnum(str, Enum):
+    """Menu permission type enumeration"""
+    PUBLIC = "public"
+    AUTHENTICATED = "authenticated"
+    ROLE_BASED = "role_based"
+    PERMISSION_BASED = "permission_based"
+
+
+class MenuLinkTypeEnum(str, Enum):
+    """Menu link type enumeration"""
+    INTERNAL = "internal"
+    EXTERNAL = "external"
+    NEW_TAB = "new_tab"
+    MODAL = "modal"
+    NONE = "none"
+
+
 # Placeholder models for domain-specific features
 class Menu(Base, AuditMixin):
     """
-    Menu model - placeholder for menu management
+    Menu model - hierarchical menu management with role-based access control
+    Supports multi-level tree structure with parent-child relationships
     """
     __tablename__ = "menus"
 
@@ -536,56 +561,122 @@ class Menu(Base, AuditMixin):
     tenant_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False
+        nullable=False,
+        comment="Tenant ID for multi-tenancy"
     )
 
     # Basic Information
-    menu_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    menu_code: Mapped[str] = mapped_column(String(50), nullable=False)
+    menu_name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        comment="Menu display name"
+    )
+    menu_code: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        comment="Unique menu code within tenant"
+    )
     description: Mapped[str] = mapped_column(Text, nullable=True)
-    menu_url: Mapped[str] = mapped_column(String(500), nullable=True)
-    menu_icon: Mapped[str] = mapped_column(String(100), nullable=True)
-    display_order: Mapped[int] = mapped_column(BigInteger, default=0)
-    parent_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
+
+    # Menu Type
+    menu_type: Mapped[str] = mapped_column(
+        SQLEnum(MenuTypeEnum),
+        default=MenuTypeEnum.USER,
+        nullable=False,
+        comment="Menu type: user, site, admin"
+    )
+
+    # URL and Icon
+    menu_url: Mapped[str] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="Menu URL or route path"
+    )
+    menu_icon: Mapped[str] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="Icon class or name (e.g., fa-home)"
+    )
+
+    # Link Behavior
+    link_type: Mapped[str] = mapped_column(
+        SQLEnum(MenuLinkTypeEnum),
+        default=MenuLinkTypeEnum.INTERNAL,
+        nullable=False,
+        comment="How the link should be opened"
+    )
+
+    # Hierarchy
+    parent_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("menus.id", ondelete="CASCADE"),
+        nullable=True,
+        comment="Parent menu ID for hierarchical structure"
+    )
+    depth: Mapped[int] = mapped_column(
+        BigInteger,
+        default=0,
+        nullable=False,
+        comment="Depth level in hierarchy (0=root)"
+    )
+    path: Mapped[str] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="Materialized path (e.g., /1/3/5)"
+    )
+
+    # Display Order
+    display_order: Mapped[int] = mapped_column(
+        BigInteger,
+        default=0,
+        nullable=False,
+        comment="Display order within same parent"
+    )
+
+    # Permission Settings
+    permission_type: Mapped[str] = mapped_column(
+        SQLEnum(MenuPermissionTypeEnum),
+        default=MenuPermissionTypeEnum.PUBLIC,
+        nullable=False,
+        comment="Permission requirement type"
+    )
+
+    # Visibility
+    is_visible: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+        comment="Whether menu is visible"
+    )
+
+    # Metadata (JSON)
+    metadata: Mapped[dict] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="Additional metadata (badge, tooltip, etc.)"
+    )
 
     # Relationships
     tenant = relationship("Tenant", back_populates="menus")
+    parent = relationship(
+        "Menu",
+        remote_side=[id],
+        backref="children"
+    )
 
     # Indexes
     __table_args__ = (
         UniqueConstraint("tenant_id", "menu_code", name="uk_tenant_menu_code"),
         Index("idx_tenant_id", "tenant_id"),
         Index("idx_menu_code", "menu_code"),
+        Index("idx_menu_type", "menu_type"),
+        Index("idx_parent_id", "parent_id"),
         Index("idx_display_order", "display_order"),
+        Index("idx_tenant_type_parent", "tenant_id", "menu_type", "parent_id"),
     )
 
+    def __repr__(self) -> str:
+        return f"<Menu(id={self.id}, code={self.menu_code}, name={self.menu_name})>"
 
-class Board(Base, AuditMixin):
-    """
-    Board model - placeholder for board/community management
-    """
-    __tablename__ = "boards"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-
-    # Tenant
-    tenant_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False
-    )
-
-    # Basic Information
-    board_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    board_code: Mapped[str] = mapped_column(String(50), nullable=False)
-    description: Mapped[str] = mapped_column(Text, nullable=True)
-
-    # Relationships
-    tenant = relationship("Tenant", back_populates="boards")
-
-    # Indexes
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "board_code", name="uk_tenant_board_code"),
-        Index("idx_tenant_id", "tenant_id"),
-        Index("idx_board_code", "board_code"),
-    )
+# Board model moved to app.models.board (BoardExtended)

@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { UserMenu } from '@/components/auth'
 
 export default function Home() {
   const { data, isLoading, error } = useQuery({
@@ -14,6 +15,16 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      {/* Navigation */}
+      <nav className="bg-white shadow-sm">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-bold text-gray-900">MyApp</h1>
+            <UserMenu />
+          </div>
+        </div>
+      </nav>
+
       <div className="container mx-auto px-4 py-16">
         <div className="max-w-4xl mx-auto">
           {/* Header */}

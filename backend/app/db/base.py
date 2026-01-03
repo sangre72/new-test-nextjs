@@ -15,8 +15,20 @@ from app.models.shared import (
     Permission,
     RolePermission,
     Menu,
-    Board,
 )
+
+# Import board models
+from app.models.board import (
+    BoardExtended,
+    BoardCategory,
+    BoardPost,
+    BoardComment,
+    BoardAttachment,
+    BoardLike,
+)
+
+# Import category model
+from app.models.category import Category
 
 __all__ = [
     "Base",
@@ -29,5 +41,11 @@ __all__ = [
     "Permission",
     "RolePermission",
     "Menu",
-    "Board",
+    "BoardExtended",
+    "BoardCategory",
+    "BoardPost",
+    "BoardComment",
+    "BoardAttachment",
+    "BoardLike",
+    "Category",
 ]
