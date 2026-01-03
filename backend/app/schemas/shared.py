@@ -1,273 +1,374 @@
 """
-Shared Schemas (Pydantic v2)
-
-공유 모델의 요청/응답 스키마 정의
-
-포함:
-- TenantSchema
-- TenantSettingsSchema
-- UserGroupSchema
-- RoleSchema
+Pydantic Schemas for Shared Models
+Used for request/response validation and serialization
 """
-
-from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import Optional, List, Dict, Any
-from enum import Enum
+from typing import Optional, List
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 
-# ============================================================
-# Enums
-# ============================================================
-class GroupTypeEnum(str, Enum):
-    """그룹 타입"""
-    SYSTEM = "system"
-    CUSTOM = "custom"
+# Enums for Pydantic
+class TenantStatusEnum(str):
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    INACTIVE = "inactive"
 
 
-class RoleScopeEnum(str, Enum):
-    """역할 범위"""
-    ADMIN = "admin"
-    USER = "user"
-    BOTH = "both"
+class UserStatusEnum(str):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    SUSPENDED = "suspended"
+    DELETED = "deleted"
 
 
-# ============================================================
-# Tenant Schemas
-# ============================================================
-class TenantSettings(BaseModel):
-    """테넌트 설정"""
-    theme: Optional[str] = Field(None, max_length=50)  # 테마 (default, dark, light 등)
-    logo: Optional[str] = Field(None, max_length=255)  # 로고 URL
-    favicon: Optional[str] = Field(None, max_length=255)  # 파비콘 URL
-    language: Optional[str] = Field("ko", max_length=10)  # 언어 (ko, en, ja, zh)
-    timezone: Optional[str] = Field("Asia/Seoul", max_length=50)  # 시간대
-    primary_color: Optional[str] = Field(None, max_length=20)  # 기본 색상
-    company_name: Optional[str] = Field(None, max_length=100)  # 회사명
-    contact_email: Optional[str] = Field(None, max_length=255)  # 연락처 이메일
-    contact_phone: Optional[str] = Field(None, max_length=20)  # 연락처 전화
+# ==================== Tenant Schemas ====================
 
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "theme": "default",
-                "logo": "/uploads/logo.png",
-                "favicon": "/uploads/favicon.ico",
-                "language": "ko",
-                "timezone": "Asia/Seoul",
-                "primary_color": "#1976d2",
-                "company_name": "회사명"
-            }
-        }
-    )
-
-
-class TenantCreate(BaseModel):
-    """테넌트 생성 요청"""
-    tenant_code: str = Field(..., min_length=1, max_length=50)
-    tenant_name: str = Field(..., min_length=1, max_length=100)
+class TenantBase(BaseModel):
+    """Base tenant schema"""
+    tenant_code: str = Field(..., min_length=1, max_length=50, description="Tenant code")
+    tenant_name: str = Field(..., min_length=1, max_length=100, description="Tenant name")
     description: Optional[str] = Field(None, max_length=500)
     domain: Optional[str] = Field(None, max_length=255)
     subdomain: Optional[str] = Field(None, max_length=100)
-    admin_email: Optional[str] = Field(None, max_length=255)
+    settings: Optional[dict] = None
+    admin_email: Optional[EmailStr] = None
     admin_name: Optional[str] = Field(None, max_length=100)
-    settings: Optional[TenantSettings] = None
+    status: str = Field(default="active")
 
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "tenant_code": "site_a",
-                "tenant_name": "사이트 A",
-                "description": "쇼핑몰",
-                "domain": "siteA.com",
-                "subdomain": "siteA",
-                "admin_email": "admin@siteA.com",
-                "admin_name": "관리자",
-                "settings": {
-                    "theme": "default",
-                    "logo": "/uploads/logo.png",
-                    "language": "ko"
-                }
-            }
-        }
-    )
+
+class TenantCreate(TenantBase):
+    """Schema for creating tenant"""
+    pass
 
 
 class TenantUpdate(BaseModel):
-    """테넌트 수정 요청"""
-    tenant_name: Optional[str] = Field(None, min_length=1, max_length=100)
-    description: Optional[str] = Field(None, max_length=500)
-    domain: Optional[str] = Field(None, max_length=255)
-    subdomain: Optional[str] = Field(None, max_length=100)
-    admin_email: Optional[str] = Field(None, max_length=255)
-    admin_name: Optional[str] = Field(None, max_length=100)
-    settings: Optional[TenantSettings] = None
-    is_active: Optional[bool] = None
+    """Schema for updating tenant"""
+    tenant_name: Optional[str] = None
+    description: Optional[str] = None
+    domain: Optional[str] = None
+    subdomain: Optional[str] = None
+    settings: Optional[dict] = None
+    admin_email: Optional[EmailStr] = None
+    admin_name: Optional[str] = None
+    status: Optional[str] = None
 
 
-class TenantResponse(BaseModel):
-    """테넌트 응답"""
+class TenantResponse(TenantBase):
+    """Schema for tenant response"""
     id: int
-    tenant_code: str
-    tenant_name: str
-    description: Optional[str]
-    domain: Optional[str]
-    subdomain: Optional[str]
-    admin_email: Optional[str]
-    admin_name: Optional[str]
-    settings: Optional[Dict[str, Any]]
     created_at: datetime
-    created_by: Optional[str]
+    created_by: Optional[str] = None
     updated_at: datetime
-    updated_by: Optional[str]
+    updated_by: Optional[str] = None
     is_active: bool
     is_deleted: bool
 
     model_config = ConfigDict(from_attributes=True)
 
 
-# ============================================================
-# UserGroup Schemas
-# ============================================================
-class UserGroupCreate(BaseModel):
-    """사용자 그룹 생성 요청"""
-    tenant_id: Optional[int] = None
+class TenantDetailResponse(TenantResponse):
+    """Detailed tenant response with relationships"""
+    users: Optional[List["UserResponse"]] = []
+    user_groups: Optional[List["UserGroupResponse"]] = []
+
+
+# ==================== User Schemas ====================
+
+class UserBase(BaseModel):
+    """Base user schema"""
+    username: str = Field(..., min_length=3, max_length=100)
+    email: EmailStr
+    full_name: Optional[str] = Field(None, max_length=100)
+    phone: Optional[str] = Field(None, max_length=20)
+    bio: Optional[str] = None
+
+
+class UserCreate(UserBase):
+    """Schema for creating user"""
+    password: str = Field(..., min_length=8, description="Password (minimum 8 characters)")
+    tenant_id: int
+
+
+class UserUpdate(BaseModel):
+    """Schema for updating user"""
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+    status: Optional[str] = None
+    is_superuser: Optional[bool] = None
+
+
+class UserResponse(UserBase):
+    """Schema for user response"""
+    id: int
+    tenant_id: int
+    is_superuser: bool
+    profile_image_url: Optional[str] = None
+    status: str
+    is_email_verified: bool
+    email_verified_at: Optional[datetime] = None
+    last_login_at: Optional[datetime] = None
+    created_at: datetime
+    created_by: Optional[str] = None
+    updated_at: datetime
+    updated_by: Optional[str] = None
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserDetailResponse(UserResponse):
+    """Detailed user response with relationships"""
+    user_groups: Optional[List["UserGroupResponse"]] = []
+    roles: Optional[List["RoleResponse"]] = []
+
+
+# ==================== User Group Schemas ====================
+
+class UserGroupBase(BaseModel):
+    """Base user group schema"""
     group_name: str = Field(..., min_length=1, max_length=100)
     group_code: str = Field(..., min_length=1, max_length=50)
     description: Optional[str] = Field(None, max_length=500)
-    priority: int = Field(0, ge=0)
-    group_type: GroupTypeEnum = GroupTypeEnum.CUSTOM
+    priority: int = Field(default=0)
+    group_type: str = Field(default="custom")
+    tenant_id: Optional[int] = None
+
+
+class UserGroupCreate(UserGroupBase):
+    """Schema for creating user group"""
+    pass
 
 
 class UserGroupUpdate(BaseModel):
-    """사용자 그룹 수정 요청"""
-    group_name: Optional[str] = Field(None, min_length=1, max_length=100)
-    description: Optional[str] = Field(None, max_length=500)
-    priority: Optional[int] = Field(None, ge=0)
+    """Schema for updating user group"""
+    group_name: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[int] = None
+    is_active: Optional[bool] = None
 
 
-class UserGroupResponse(BaseModel):
-    """사용자 그룹 응답"""
+class UserGroupResponse(UserGroupBase):
+    """Schema for user group response"""
     id: int
-    tenant_id: Optional[int]
-    group_name: str
-    group_code: str
-    description: Optional[str]
-    priority: int
-    group_type: GroupTypeEnum
     created_at: datetime
-    created_by: Optional[str]
+    created_by: Optional[str] = None
     updated_at: datetime
-    updated_by: Optional[str]
+    updated_by: Optional[str] = None
     is_active: bool
-    is_deleted: bool
 
     model_config = ConfigDict(from_attributes=True)
 
 
-class UserGroupWithMembers(UserGroupResponse):
-    """멤버 정보가 포함된 사용자 그룹"""
-    member_count: Optional[int] = 0
+class UserGroupDetailResponse(UserGroupResponse):
+    """Detailed user group response with relationships"""
+    users: Optional[List[UserResponse]] = []
 
 
-# ============================================================
-# UserGroupMember Schemas
-# ============================================================
 class UserGroupMemberCreate(BaseModel):
-    """사용자-그룹 매핑 생성 요청"""
-    user_id: str = Field(..., min_length=1, max_length=50)
+    """Schema for adding user to group"""
+    user_id: int
     group_id: int
 
 
 class UserGroupMemberResponse(BaseModel):
-    """사용자-그룹 매핑 응답"""
+    """Schema for user group member response"""
     id: int
-    user_id: str
+    user_id: int
     group_id: int
     created_at: datetime
-    created_by: Optional[str]
+    created_by: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
-# ============================================================
-# Role Schemas
-# ============================================================
-class RoleCreate(BaseModel):
-    """역할 생성 요청"""
+# ==================== Role Schemas ====================
+
+class RoleBase(BaseModel):
+    """Base role schema"""
     role_name: str = Field(..., min_length=1, max_length=100)
     role_code: str = Field(..., min_length=1, max_length=50)
     description: Optional[str] = Field(None, max_length=500)
-    priority: int = Field(0, ge=0)
-    role_scope: RoleScopeEnum = RoleScopeEnum.BOTH
+    priority: int = Field(default=0)
+    role_type: str = Field(default="both")
+
+
+class RoleCreate(RoleBase):
+    """Schema for creating role"""
+    pass
 
 
 class RoleUpdate(BaseModel):
-    """역할 수정 요청"""
-    role_name: Optional[str] = Field(None, min_length=1, max_length=100)
-    description: Optional[str] = Field(None, max_length=500)
-    priority: Optional[int] = Field(None, ge=0)
+    """Schema for updating role"""
+    role_name: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[int] = None
+    is_active: Optional[bool] = None
 
 
-class RoleResponse(BaseModel):
-    """역할 응답"""
+class RoleResponse(RoleBase):
+    """Schema for role response"""
     id: int
-    role_name: str
-    role_code: str
-    description: Optional[str]
-    priority: int
-    role_scope: RoleScopeEnum
     created_at: datetime
-    created_by: Optional[str]
+    created_by: Optional[str] = None
     updated_at: datetime
-    updated_by: Optional[str]
+    updated_by: Optional[str] = None
     is_active: bool
-    is_deleted: bool
 
     model_config = ConfigDict(from_attributes=True)
 
 
-# ============================================================
-# UserRole Schemas
-# ============================================================
+class RoleDetailResponse(RoleResponse):
+    """Detailed role response with relationships"""
+    permissions: Optional[List["PermissionResponse"]] = []
+
+
 class UserRoleCreate(BaseModel):
-    """사용자-역할 매핑 생성 요청"""
-    user_id: str = Field(..., min_length=1, max_length=50)
+    """Schema for assigning role to user"""
+    user_id: int
     role_id: int
 
 
 class UserRoleResponse(BaseModel):
-    """사용자-역할 매핑 응답"""
+    """Schema for user role response"""
     id: int
-    user_id: str
+    user_id: int
     role_id: int
     created_at: datetime
-    created_by: Optional[str]
+    created_by: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
-# ============================================================
-# 공통 응답 스키마
-# ============================================================
-class SuccessResponse(BaseModel):
-    """성공 응답 (일반)"""
-    success: bool = True
-    data: Optional[dict] = None
-    message: Optional[str] = None
+# ==================== Permission Schemas ====================
+
+class PermissionBase(BaseModel):
+    """Base permission schema"""
+    permission_name: str = Field(..., min_length=1, max_length=100)
+    permission_code: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    resource: str
+    action: str
 
 
-class ListResponse(BaseModel):
-    """성공 응답 (리스트)"""
-    success: bool = True
-    data: list = Field(default_factory=list)
-    total: int = 0
-    page: int = 1
-    page_size: int = 20
+class PermissionCreate(PermissionBase):
+    """Schema for creating permission"""
+    pass
 
 
-class ErrorResponse(BaseModel):
-    """실패 응답"""
-    success: bool = False
-    error_code: str
-    message: str
+class PermissionUpdate(BaseModel):
+    """Schema for updating permission"""
+    permission_name: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class PermissionResponse(PermissionBase):
+    """Schema for permission response"""
+    id: int
+    created_at: datetime
+    created_by: Optional[str] = None
+    updated_at: datetime
+    updated_by: Optional[str] = None
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RolePermissionCreate(BaseModel):
+    """Schema for assigning permission to role"""
+    role_id: int
+    permission_id: int
+
+
+class RolePermissionResponse(BaseModel):
+    """Schema for role permission response"""
+    id: int
+    role_id: int
+    permission_id: int
+    created_at: datetime
+    created_by: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ==================== Menu Schemas ====================
+
+class MenuBase(BaseModel):
+    """Base menu schema"""
+    menu_name: str = Field(..., min_length=1, max_length=100)
+    menu_code: str = Field(..., min_length=1, max_length=50)
+    description: Optional[str] = Field(None, max_length=500)
+    menu_url: Optional[str] = Field(None, max_length=500)
+    menu_icon: Optional[str] = Field(None, max_length=100)
+    display_order: int = Field(default=0)
+    parent_id: Optional[int] = None
+    tenant_id: int
+
+
+class MenuCreate(MenuBase):
+    """Schema for creating menu"""
+    pass
+
+
+class MenuUpdate(BaseModel):
+    """Schema for updating menu"""
+    menu_name: Optional[str] = None
+    description: Optional[str] = None
+    menu_url: Optional[str] = None
+    menu_icon: Optional[str] = None
+    display_order: Optional[int] = None
+    parent_id: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class MenuResponse(MenuBase):
+    """Schema for menu response"""
+    id: int
+    created_at: datetime
+    created_by: Optional[str] = None
+    updated_at: datetime
+    updated_by: Optional[str] = None
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ==================== Board Schemas ====================
+
+class BoardBase(BaseModel):
+    """Base board schema"""
+    board_name: str = Field(..., min_length=1, max_length=100)
+    board_code: str = Field(..., min_length=1, max_length=50)
+    description: Optional[str] = Field(None, max_length=500)
+    tenant_id: int
+
+
+class BoardCreate(BoardBase):
+    """Schema for creating board"""
+    pass
+
+
+class BoardUpdate(BaseModel):
+    """Schema for updating board"""
+    board_name: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class BoardResponse(BoardBase):
+    """Schema for board response"""
+    id: int
+    created_at: datetime
+    created_by: Optional[str] = None
+    updated_at: datetime
+    updated_by: Optional[str] = None
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Update forward references
+UserGroupDetailResponse.model_rebuild()
+UserDetailResponse.model_rebuild()
+RoleDetailResponse.model_rebuild()

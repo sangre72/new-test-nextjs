@@ -1,56 +1,36 @@
 """
-Database Session Management (SQLAlchemy 2.0 + AsyncIO)
-
-AsyncSession을 사용하여 비동기 데이터베이스 작업을 지원합니다.
-PostgreSQL + asyncpg를 사용합니다.
-
-사용법:
-    from app.db.session import AsyncSessionLocal, engine
-
-    # 비동기 세션 사용
-    async with AsyncSessionLocal() as session:
-        result = await session.execute(select(User))
-        users = result.scalars().all()
+Database session management
 """
-
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.pool import NullPool
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
-from typing import AsyncGenerator
 
-# 비동기 엔진 생성
-engine = create_async_engine(
+# Create database engine
+engine = create_engine(
     settings.DATABASE_URL,
-    echo=settings.SQL_ECHO,
-    future=True,
     pool_pre_ping=True,
-    pool_size=20,
-    max_overflow=0,
-    poolclass=NullPool if settings.ENVIRONMENT == "test" else None,
+    echo=settings.ENVIRONMENT == "development",
 )
 
-# 비동기 세션 팩토리
-AsyncSessionLocal = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autoflush=False,
-    autocommit=False,
-)
+# Create sessionmaker
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Base class for models
+Base = declarative_base()
 
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+def get_db():
     """
-    의존성 주입용 세션 제공자
+    Database dependency for FastAPI
 
     Usage:
-        @app.get("/users")
-        async def list_users(session: AsyncSession = Depends(get_session)):
-            result = await session.execute(select(User))
-            return result.scalars().all()
+        @app.get("/items")
+        def read_items(db: Session = Depends(get_db)):
+            return db.query(Item).all()
     """
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

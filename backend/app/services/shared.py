@@ -1,492 +1,468 @@
 """
-Shared Services - 공유 모델의 비즈니스 로직
-
-포함:
-- TenantService
-- UserGroupService
-- RoleService
+Business Logic Services for Shared Models
+Handles CRUD operations and business logic
 """
-
-import json
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional, List, Dict, Any
-
+from typing import Optional, List, Generic, TypeVar
+from sqlalchemy import select, and_, or_
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from app.models.shared import (
-    Tenant,
-    UserGroup,
-    UserGroupMember,
-    Role,
-    UserRole,
-    GroupTypeEnum,
-    RoleScopeEnum,
+    Tenant, User, UserGroup, UserGroupMember, Role, UserRole,
+    Permission, RolePermission, Menu, Board
+)
+from app.schemas.shared import (
+    TenantCreate, TenantUpdate, UserCreate, UserUpdate, UserGroupCreate, UserGroupUpdate,
+    RoleCreate, RoleUpdate, PermissionCreate, PermissionUpdate,
+    UserGroupMemberCreate, UserRoleCreate, RolePermissionCreate
 )
 
+T = TypeVar('T')
 
-class TenantService:
-    """테넌트 관리 서비스"""
 
-    @staticmethod
-    async def get_tenant_by_code(
-        session: AsyncSession,
-        tenant_code: str,
-    ) -> Optional[Tenant]:
-        """테넌트 코드로 테넌트 조회"""
-        result = await session.execute(
-            select(Tenant).where(
-                Tenant.tenant_code == tenant_code,
-                Tenant.is_deleted == False,
-            )
-        )
-        return result.scalar_one_or_none()
+# ==================== Base Service Class ====================
 
-    @staticmethod
-    async def get_tenant_by_id(
-        session: AsyncSession,
-        tenant_id: int,
-    ) -> Optional[Tenant]:
-        """테넌트 ID로 테넌트 조회"""
-        result = await session.execute(
-            select(Tenant).where(
-                Tenant.id == tenant_id,
-                Tenant.is_deleted == False,
-            )
-        )
-        return result.scalar_one_or_none()
+class BaseService(Generic[T]):
+    """Base service for CRUD operations"""
 
-    @staticmethod
-    async def get_tenant_by_domain(
-        session: AsyncSession,
-        domain: str,
-    ) -> Optional[Tenant]:
-        """도메인으로 테넌트 조회 (서브도메인 또는 커스텀 도메인)"""
-        # 서브도메인으로 먼저 찾기
-        result = await session.execute(
-            select(Tenant).where(
-                Tenant.subdomain == domain,
-                Tenant.is_deleted == False,
-                Tenant.is_active == True,
-            )
-        )
-        tenant = result.scalar_one_or_none()
+    def __init__(self, db: Session, model: type[T]):
+        self.db = db
+        self.model = model
 
-        if tenant:
-            return tenant
+    def get(self, id: int) -> Optional[T]:
+        """Get single record by id"""
+        return self.db.query(self.model).filter(self.model.id == id).first()
 
-        # 커스텀 도메인으로 찾기
-        result = await session.execute(
-            select(Tenant).where(
-                Tenant.domain == domain,
-                Tenant.is_deleted == False,
-                Tenant.is_active == True,
-            )
-        )
-        return result.scalar_one_or_none()
+    def get_all(self, skip: int = 0, limit: int = 100) -> List[T]:
+        """Get all records with pagination"""
+        return self.db.query(self.model).offset(skip).limit(limit).all()
 
-    @staticmethod
-    async def list_tenants(
-        session: AsyncSession,
-        skip: int = 0,
-        limit: int = 100,
-        is_active: Optional[bool] = None,
-    ) -> tuple[List[Tenant], int]:
-        """모든 테넌트 조회"""
-        # 쿼리 구성
-        query = select(Tenant).where(Tenant.is_deleted == False)
+    def create(self, obj_in: dict) -> T:
+        """Create new record"""
+        obj = self.model(**obj_in)
+        self.db.add(obj)
+        self.db.commit()
+        self.db.refresh(obj)
+        return obj
 
-        if is_active is not None:
-            query = query.where(Tenant.is_active == is_active)
-
-        # 총 개수
-        count_query = select(func.count(Tenant.id)).where(Tenant.is_deleted == False)
-        if is_active is not None:
-            count_query = count_query.where(Tenant.is_active == is_active)
-
-        count_result = await session.execute(count_query)
-        total = count_result.scalar()
-
-        # 페이징된 결과
-        result = await session.execute(
-            query.order_by(Tenant.created_at.desc()).offset(skip).limit(limit)
-        )
-        tenants = result.scalars().all()
-
-        return tenants, total
-
-    @staticmethod
-    async def create_tenant(
-        session: AsyncSession,
-        tenant_code: str,
-        tenant_name: str,
-        description: Optional[str] = None,
-        domain: Optional[str] = None,
-        subdomain: Optional[str] = None,
-        admin_email: Optional[str] = None,
-        admin_name: Optional[str] = None,
-        settings: Optional[Dict[str, Any]] = None,
-        created_by: str = "system",
-    ) -> Tenant:
-        """새 테넌트 생성"""
-        # settings를 JSON으로 변환
-        settings_json = None
-        if settings:
-            settings_json = settings
-
-        tenant = Tenant(
-            tenant_code=tenant_code,
-            tenant_name=tenant_name,
-            description=description,
-            domain=domain,
-            subdomain=subdomain,
-            admin_email=admin_email,
-            admin_name=admin_name,
-            settings=settings_json,
-            created_by=created_by,
-        )
-        session.add(tenant)
-        await session.commit()
-        await session.refresh(tenant)
-        return tenant
-
-    @staticmethod
-    async def update_tenant(
-        session: AsyncSession,
-        tenant_id: int,
-        tenant_name: Optional[str] = None,
-        description: Optional[str] = None,
-        domain: Optional[str] = None,
-        subdomain: Optional[str] = None,
-        admin_email: Optional[str] = None,
-        admin_name: Optional[str] = None,
-        settings: Optional[Dict[str, Any]] = None,
-        is_active: Optional[bool] = None,
-        updated_by: str = "system",
-    ) -> Optional[Tenant]:
-        """테넌트 수정"""
-        tenant = await TenantService.get_tenant_by_id(session, tenant_id)
-
-        if not tenant:
+    def update(self, id: int, obj_in: dict) -> Optional[T]:
+        """Update existing record"""
+        obj = self.get(id)
+        if not obj:
             return None
+        for key, value in obj_in.items():
+            if hasattr(obj, key) and value is not None:
+                setattr(obj, key, value)
+        self.db.commit()
+        self.db.refresh(obj)
+        return obj
 
-        if tenant_name is not None:
-            tenant.tenant_name = tenant_name
-        if description is not None:
-            tenant.description = description
-        if domain is not None:
-            tenant.domain = domain
-        if subdomain is not None:
-            tenant.subdomain = subdomain
-        if admin_email is not None:
-            tenant.admin_email = admin_email
-        if admin_name is not None:
-            tenant.admin_name = admin_name
-        if settings is not None:
-            tenant.settings = settings
-        if is_active is not None:
-            tenant.is_active = is_active
-
-        tenant.updated_by = updated_by
-
-        await session.commit()
-        await session.refresh(tenant)
-        return tenant
-
-    @staticmethod
-    async def delete_tenant(
-        session: AsyncSession,
-        tenant_id: int,
-        updated_by: str = "system",
-    ) -> bool:
-        """테넌트 소프트 삭제 (기본 테넌트는 삭제 불가)"""
-        tenant = await TenantService.get_tenant_by_id(session, tenant_id)
-
-        if not tenant:
+    def delete(self, id: int) -> bool:
+        """Soft delete record"""
+        obj = self.get(id)
+        if not obj:
             return False
-
-        # 기본 테넌트는 삭제 불가
-        if tenant.tenant_code == "default":
-            return False
-
-        tenant.is_deleted = True
-        tenant.updated_by = updated_by
-
-        await session.commit()
+        obj.is_deleted = True
+        self.db.commit()
         return True
 
-    @staticmethod
-    async def get_tenant_settings(
-        session: AsyncSession,
-        tenant_id: int,
-    ) -> Optional[Dict[str, Any]]:
-        """테넌트의 설정 조회"""
-        tenant = await TenantService.get_tenant_by_id(session, tenant_id)
-
-        if not tenant:
-            return None
-
-        return tenant.settings or {}
-
-    @staticmethod
-    async def update_tenant_settings(
-        session: AsyncSession,
-        tenant_id: int,
-        settings: Dict[str, Any],
-        updated_by: str = "system",
-    ) -> Optional[Dict[str, Any]]:
-        """테넌트의 설정 업데이트 (부분 업데이트)"""
-        tenant = await TenantService.get_tenant_by_id(session, tenant_id)
-
-        if not tenant:
-            return None
-
-        # 기존 설정 유지하고 새 설정으로 병합
-        current_settings = tenant.settings or {}
-        updated_settings = {**current_settings, **settings}
-
-        tenant.settings = updated_settings
-        tenant.updated_by = updated_by
-
-        await session.commit()
-        await session.refresh(tenant)
-        return tenant.settings
+    def hard_delete(self, id: int) -> bool:
+        """Hard delete record"""
+        obj = self.get(id)
+        if not obj:
+            return False
+        self.db.delete(obj)
+        self.db.commit()
+        return True
 
 
-class UserGroupService:
-    """사용자 그룹 관리 서비스"""
+# ==================== Tenant Service ====================
 
-    @staticmethod
-    async def get_group_by_code(
-        session: AsyncSession,
-        tenant_id: int,
-        group_code: str,
-    ) -> Optional[UserGroup]:
-        """그룹 코드로 그룹 조회"""
-        result = await session.execute(
-            select(UserGroup).where(
-                UserGroup.tenant_id == tenant_id,
-                UserGroup.group_code == group_code,
-                UserGroup.is_deleted == False,
-            )
-        )
-        return result.scalar_one_or_none()
+class TenantService(BaseService[Tenant]):
+    """Service for tenant management"""
 
-    @staticmethod
-    async def list_groups(
-        session: AsyncSession,
-        tenant_id: int,
-        skip: int = 0,
-        limit: int = 100,
-    ) -> tuple[List[UserGroup], int]:
-        """테넌트의 모든 그룹 조회"""
-        # 총 개수
-        count_result = await session.execute(
-            select(func.count(UserGroup.id)).where(
-                UserGroup.tenant_id == tenant_id,
-                UserGroup.is_deleted == False,
-            )
-        )
-        total = count_result.scalar()
+    def __init__(self, db: Session):
+        super().__init__(db, Tenant)
 
-        # 페이징된 결과
-        result = await session.execute(
-            select(UserGroup)
-            .where(
-                UserGroup.tenant_id == tenant_id,
-                UserGroup.is_deleted == False,
-            )
-            .order_by(UserGroup.priority.desc(), UserGroup.created_at.asc())
-            .offset(skip)
-            .limit(limit)
-        )
-        groups = result.scalars().all()
+    def get_by_code(self, code: str) -> Optional[Tenant]:
+        """Get tenant by code"""
+        return self.db.query(Tenant).filter(Tenant.tenant_code == code).first()
 
-        return groups, total
+    def get_by_domain(self, domain: str) -> Optional[Tenant]:
+        """Get tenant by domain"""
+        return self.db.query(Tenant).filter(Tenant.domain == domain).first()
 
-    @staticmethod
-    async def add_user_to_group(
-        session: AsyncSession,
-        user_id: str,
-        group_id: int,
-        created_by: str = "system",
-    ) -> UserGroupMember:
-        """사용자를 그룹에 추가"""
-        # 이미 멤버인지 확인
-        result = await session.execute(
-            select(UserGroupMember).where(
-                UserGroupMember.user_id == user_id,
-                UserGroupMember.group_id == group_id,
-            )
-        )
-        existing = result.scalar_one_or_none()
-        if existing:
-            return existing
+    def get_by_subdomain(self, subdomain: str) -> Optional[Tenant]:
+        """Get tenant by subdomain"""
+        return self.db.query(Tenant).filter(Tenant.subdomain == subdomain).first()
 
-        member = UserGroupMember(
-            user_id=user_id,
-            group_id=group_id,
-            created_by=created_by,
-        )
-        session.add(member)
-        await session.commit()
-        await session.refresh(member)
-        return member
+    def create(self, obj_in: TenantCreate) -> Tenant:
+        """Create new tenant"""
+        try:
+            tenant = Tenant(**obj_in.model_dump())
+            self.db.add(tenant)
+            self.db.commit()
+            self.db.refresh(tenant)
+            return tenant
+        except IntegrityError:
+            self.db.rollback()
+            raise
 
-    @staticmethod
-    async def get_user_groups(
-        session: AsyncSession,
-        user_id: str,
-        tenant_id: Optional[int] = None,
-    ) -> List[UserGroup]:
-        """사용자가 속한 모든 그룹 조회"""
-        query = (
-            select(UserGroup)
-            .join(UserGroupMember)
-            .where(
-                UserGroupMember.user_id == user_id,
-                UserGroup.is_deleted == False,
-            )
-        )
+    def update(self, id: int, obj_in: TenantUpdate) -> Optional[Tenant]:
+        """Update tenant"""
+        return super().update(id, obj_in.model_dump(exclude_unset=True))
 
+    def get_active_tenants(self) -> List[Tenant]:
+        """Get all active tenants"""
+        return self.db.query(Tenant).filter(
+            Tenant.is_active == True,
+            Tenant.is_deleted == False
+        ).all()
+
+
+# ==================== User Service ====================
+
+class UserService(BaseService[User]):
+    """Service for user management"""
+
+    def __init__(self, db: Session):
+        super().__init__(db, User)
+
+    def get_by_username(self, tenant_id: int, username: str) -> Optional[User]:
+        """Get user by username within tenant"""
+        return self.db.query(User).filter(
+            User.tenant_id == tenant_id,
+            User.username == username
+        ).first()
+
+    def get_by_email(self, tenant_id: int, email: str) -> Optional[User]:
+        """Get user by email within tenant"""
+        return self.db.query(User).filter(
+            User.tenant_id == tenant_id,
+            User.email == email
+        ).first()
+
+    def get_by_tenant(self, tenant_id: int, skip: int = 0, limit: int = 100) -> List[User]:
+        """Get all users in tenant"""
+        return self.db.query(User).filter(User.tenant_id == tenant_id).offset(skip).limit(limit).all()
+
+    def create(self, obj_in: UserCreate) -> User:
+        """Create new user with password hashing"""
+        from passlib.context import CryptContext
+        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+        user_data = obj_in.model_dump(exclude={'password'})
+        user_data['hashed_password'] = pwd_context.hash(obj_in.password)
+
+        try:
+            user = User(**user_data)
+            self.db.add(user)
+            self.db.commit()
+            self.db.refresh(user)
+            return user
+        except IntegrityError:
+            self.db.rollback()
+            raise
+
+    def update(self, id: int, obj_in: UserUpdate) -> Optional[User]:
+        """Update user"""
+        return super().update(id, obj_in.model_dump(exclude_unset=True))
+
+    def get_active_users(self, tenant_id: int) -> List[User]:
+        """Get all active users in tenant"""
+        return self.db.query(User).filter(
+            User.tenant_id == tenant_id,
+            User.is_active == True,
+            User.is_deleted == False
+        ).all()
+
+    def verify_password(self, user: User, password: str) -> bool:
+        """Verify user password"""
+        from passlib.context import CryptContext
+        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        return pwd_context.verify(password, user.hashed_password)
+
+
+# ==================== User Group Service ====================
+
+class UserGroupService(BaseService[UserGroup]):
+    """Service for user group management"""
+
+    def __init__(self, db: Session):
+        super().__init__(db, UserGroup)
+
+    def get_by_code(self, code: str, tenant_id: Optional[int] = None) -> Optional[UserGroup]:
+        """Get group by code"""
+        query = self.db.query(UserGroup).filter(UserGroup.group_code == code)
         if tenant_id:
-            query = query.where(UserGroup.tenant_id == tenant_id)
+            query = query.filter(UserGroup.tenant_id == tenant_id)
+        return query.first()
 
-        result = await session.execute(query)
-        return result.scalars().all()
+    def get_by_tenant(self, tenant_id: int, skip: int = 0, limit: int = 100) -> List[UserGroup]:
+        """Get all groups in tenant"""
+        return self.db.query(UserGroup).filter(
+            UserGroup.tenant_id == tenant_id
+        ).offset(skip).limit(limit).all()
 
-    @staticmethod
-    async def get_group_member_count(
-        session: AsyncSession,
-        group_id: int,
-    ) -> int:
-        """그룹의 멤버 수"""
-        result = await session.execute(
-            select(func.count(UserGroupMember.id)).where(
-                UserGroupMember.group_id == group_id
-            )
-        )
-        return result.scalar() or 0
+    def create(self, obj_in: UserGroupCreate) -> UserGroup:
+        """Create new user group"""
+        try:
+            group = UserGroup(**obj_in.model_dump())
+            self.db.add(group)
+            self.db.commit()
+            self.db.refresh(group)
+            return group
+        except IntegrityError:
+            self.db.rollback()
+            raise
+
+    def add_user(self, group_id: int, user_id: int) -> UserGroupMember:
+        """Add user to group"""
+        try:
+            membership = UserGroupMember(user_id=user_id, group_id=group_id)
+            self.db.add(membership)
+            self.db.commit()
+            self.db.refresh(membership)
+            return membership
+        except IntegrityError:
+            self.db.rollback()
+            raise
+
+    def remove_user(self, group_id: int, user_id: int) -> bool:
+        """Remove user from group"""
+        membership = self.db.query(UserGroupMember).filter(
+            UserGroupMember.group_id == group_id,
+            UserGroupMember.user_id == user_id
+        ).first()
+        if not membership:
+            return False
+        self.db.delete(membership)
+        self.db.commit()
+        return True
+
+    def get_group_members(self, group_id: int) -> List[User]:
+        """Get all users in group"""
+        return self.db.query(User).join(
+            UserGroupMember,
+            User.id == UserGroupMember.user_id
+        ).filter(UserGroupMember.group_id == group_id).all()
+
+    def get_user_groups(self, user_id: int) -> List[UserGroup]:
+        """Get all groups for user"""
+        return self.db.query(UserGroup).join(
+            UserGroupMember,
+            UserGroup.id == UserGroupMember.group_id
+        ).filter(UserGroupMember.user_id == user_id).all()
 
 
-class RoleService:
-    """역할 관리 서비스"""
+# ==================== Role Service ====================
 
-    @staticmethod
-    async def get_role_by_code(
-        session: AsyncSession,
-        role_code: str,
-    ) -> Optional[Role]:
-        """역할 코드로 역할 조회"""
-        result = await session.execute(
-            select(Role).where(
-                Role.role_code == role_code,
-                Role.is_deleted == False,
-            )
-        )
-        return result.scalar_one_or_none()
+class RoleService(BaseService[Role]):
+    """Service for role management"""
 
-    @staticmethod
-    async def get_role_by_id(
-        session: AsyncSession,
-        role_id: int,
-    ) -> Optional[Role]:
-        """역할 ID로 역할 조회"""
-        result = await session.execute(
-            select(Role).where(
-                Role.id == role_id,
-                Role.is_deleted == False,
-            )
-        )
-        return result.scalar_one_or_none()
+    def __init__(self, db: Session):
+        super().__init__(db, Role)
 
-    @staticmethod
-    async def list_roles(
-        session: AsyncSession,
-        role_scope: Optional[RoleScopeEnum] = None,
-        skip: int = 0,
-        limit: int = 100,
-    ) -> tuple[List[Role], int]:
-        """모든 역할 조회"""
-        # 필터링
-        query = select(Role).where(Role.is_deleted == False)
+    def get_by_code(self, code: str) -> Optional[Role]:
+        """Get role by code"""
+        return self.db.query(Role).filter(Role.role_code == code).first()
 
-        if role_scope:
-            query = query.where(Role.role_scope == role_scope)
+    def create(self, obj_in: RoleCreate) -> Role:
+        """Create new role"""
+        try:
+            role = Role(**obj_in.model_dump())
+            self.db.add(role)
+            self.db.commit()
+            self.db.refresh(role)
+            return role
+        except IntegrityError:
+            self.db.rollback()
+            raise
 
-        # 총 개수
-        count_query = select(func.count(Role.id)).where(Role.is_deleted == False)
-        if role_scope:
-            count_query = count_query.where(Role.role_scope == role_scope)
+    def add_permission(self, role_id: int, permission_id: int) -> RolePermission:
+        """Add permission to role"""
+        try:
+            role_perm = RolePermission(role_id=role_id, permission_id=permission_id)
+            self.db.add(role_perm)
+            self.db.commit()
+            self.db.refresh(role_perm)
+            return role_perm
+        except IntegrityError:
+            self.db.rollback()
+            raise
 
-        count_result = await session.execute(count_query)
-        total = count_result.scalar()
+    def remove_permission(self, role_id: int, permission_id: int) -> bool:
+        """Remove permission from role"""
+        role_perm = self.db.query(RolePermission).filter(
+            RolePermission.role_id == role_id,
+            RolePermission.permission_id == permission_id
+        ).first()
+        if not role_perm:
+            return False
+        self.db.delete(role_perm)
+        self.db.commit()
+        return True
 
-        # 페이징된 결과
-        result = await session.execute(
-            query.order_by(Role.priority.desc()).offset(skip).limit(limit)
-        )
-        roles = result.scalars().all()
+    def get_role_permissions(self, role_id: int) -> List[Permission]:
+        """Get all permissions for role"""
+        return self.db.query(Permission).join(
+            RolePermission,
+            Permission.id == RolePermission.permission_id
+        ).filter(RolePermission.role_id == role_id).all()
 
-        return roles, total
+    def get_user_roles(self, user_id: int) -> List[Role]:
+        """Get all roles for user"""
+        return self.db.query(Role).join(
+            UserRole,
+            Role.id == UserRole.role_id
+        ).filter(UserRole.user_id == user_id).all()
 
-    @staticmethod
-    async def assign_role_to_user(
-        session: AsyncSession,
-        user_id: str,
-        role_id: int,
-        created_by: str = "system",
-    ) -> UserRole:
-        """사용자에게 역할 할당"""
-        # 이미 할당되었는지 확인
-        result = await session.execute(
-            select(UserRole).where(
-                UserRole.user_id == user_id,
-                UserRole.role_id == role_id,
-            )
-        )
-        existing = result.scalar_one_or_none()
-        if existing:
-            return existing
 
-        user_role = UserRole(
-            user_id=user_id,
-            role_id=role_id,
-            created_by=created_by,
-        )
-        session.add(user_role)
-        await session.commit()
-        await session.refresh(user_role)
-        return user_role
+# ==================== Permission Service ====================
 
-    @staticmethod
-    async def get_user_roles(
-        session: AsyncSession,
-        user_id: str,
-    ) -> List[Role]:
-        """사용자가 가진 모든 역할 조회"""
-        result = await session.execute(
-            select(Role)
-            .join(UserRole)
-            .where(
-                UserRole.user_id == user_id,
-                Role.is_deleted == False,
-            )
-        )
-        return result.scalars().all()
+class PermissionService(BaseService[Permission]):
+    """Service for permission management"""
 
-    @staticmethod
-    async def is_user_admin(
-        session: AsyncSession,
-        user_id: str,
-    ) -> bool:
-        """사용자가 관리자인지 확인"""
-        result = await session.execute(
-            select(func.count(UserRole.id))
-            .join(Role)
-            .where(
-                UserRole.user_id == user_id,
-                Role.role_scope == RoleScopeEnum.ADMIN,
-                Role.is_deleted == False,
-            )
-        )
-        count = result.scalar() or 0
-        return count > 0
+    def __init__(self, db: Session):
+        super().__init__(db, Permission)
+
+    def get_by_code(self, code: str) -> Optional[Permission]:
+        """Get permission by code"""
+        return self.db.query(Permission).filter(Permission.permission_code == code).first()
+
+    def get_by_resource_action(self, resource: str, action: str) -> Optional[Permission]:
+        """Get permission by resource and action"""
+        return self.db.query(Permission).filter(
+            Permission.resource == resource,
+            Permission.action == action
+        ).first()
+
+    def create(self, obj_in: PermissionCreate) -> Permission:
+        """Create new permission"""
+        try:
+            perm = Permission(**obj_in.model_dump())
+            self.db.add(perm)
+            self.db.commit()
+            self.db.refresh(perm)
+            return perm
+        except IntegrityError:
+            self.db.rollback()
+            raise
+
+
+# ==================== User Role Service ====================
+
+class UserRoleService:
+    """Service for user-role assignments"""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def assign_role(self, user_id: int, role_id: int) -> UserRole:
+        """Assign role to user"""
+        try:
+            user_role = UserRole(user_id=user_id, role_id=role_id)
+            self.db.add(user_role)
+            self.db.commit()
+            self.db.refresh(user_role)
+            return user_role
+        except IntegrityError:
+            self.db.rollback()
+            raise
+
+    def revoke_role(self, user_id: int, role_id: int) -> bool:
+        """Revoke role from user"""
+        user_role = self.db.query(UserRole).filter(
+            UserRole.user_id == user_id,
+            UserRole.role_id == role_id
+        ).first()
+        if not user_role:
+            return False
+        self.db.delete(user_role)
+        self.db.commit()
+        return True
+
+    def has_role(self, user_id: int, role_code: str) -> bool:
+        """Check if user has specific role"""
+        return self.db.query(UserRole).join(
+            Role, UserRole.role_id == Role.id
+        ).filter(
+            UserRole.user_id == user_id,
+            Role.role_code == role_code
+        ).first() is not None
+
+    def has_permission(self, user_id: int, permission_code: str) -> bool:
+        """Check if user has specific permission through roles"""
+        return self.db.query(RolePermission).join(
+            UserRole, RolePermission.role_id == UserRole.role_id
+        ).join(
+            Permission, RolePermission.permission_id == Permission.id
+        ).filter(
+            UserRole.user_id == user_id,
+            Permission.permission_code == permission_code
+        ).first() is not None
+
+    def get_user_permissions(self, user_id: int) -> List[Permission]:
+        """Get all permissions for user through roles"""
+        return self.db.query(Permission).join(
+            RolePermission, Permission.id == RolePermission.permission_id
+        ).join(
+            UserRole, RolePermission.role_id == UserRole.role_id
+        ).filter(UserRole.user_id == user_id).distinct().all()
+
+
+# ==================== Menu Service ====================
+
+class MenuService(BaseService[Menu]):
+    """Service for menu management"""
+
+    def __init__(self, db: Session):
+        super().__init__(db, Menu)
+
+    def get_by_code(self, tenant_id: int, code: str) -> Optional[Menu]:
+        """Get menu by code"""
+        return self.db.query(Menu).filter(
+            Menu.tenant_id == tenant_id,
+            Menu.menu_code == code
+        ).first()
+
+    def get_by_tenant(self, tenant_id: int, skip: int = 0, limit: int = 100) -> List[Menu]:
+        """Get all menus in tenant"""
+        return self.db.query(Menu).filter(
+            Menu.tenant_id == tenant_id
+        ).order_by(Menu.display_order).offset(skip).limit(limit).all()
+
+    def get_top_level_menus(self, tenant_id: int) -> List[Menu]:
+        """Get top-level menus (no parent)"""
+        return self.db.query(Menu).filter(
+            Menu.tenant_id == tenant_id,
+            Menu.parent_id.is_(None)
+        ).order_by(Menu.display_order).all()
+
+    def get_submenu(self, tenant_id: int, parent_id: int) -> List[Menu]:
+        """Get submenus for parent"""
+        return self.db.query(Menu).filter(
+            Menu.tenant_id == tenant_id,
+            Menu.parent_id == parent_id
+        ).order_by(Menu.display_order).all()
+
+
+# ==================== Board Service ====================
+
+class BoardService(BaseService[Board]):
+    """Service for board management"""
+
+    def __init__(self, db: Session):
+        super().__init__(db, Board)
+
+    def get_by_code(self, tenant_id: int, code: str) -> Optional[Board]:
+        """Get board by code"""
+        return self.db.query(Board).filter(
+            Board.tenant_id == tenant_id,
+            Board.board_code == code
+        ).first()
+
+    def get_by_tenant(self, tenant_id: int, skip: int = 0, limit: int = 100) -> List[Board]:
+        """Get all boards in tenant"""
+        return self.db.query(Board).filter(
+            Board.tenant_id == tenant_id
+        ).offset(skip).limit(limit).all()

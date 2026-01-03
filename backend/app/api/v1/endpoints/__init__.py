@@ -1,7 +1,3 @@
 """
-API v1 엔드포인트
+API v1 Endpoints
 """
-
-from .categories import router as categories_router
-
-__all__ = ["categories_router"]

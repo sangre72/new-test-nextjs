@@ -1,13 +1,14 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:15
-    container_name: newtest-postgres
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: myapp-db
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: newtest
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: myapp
     ports:
       - "5432:5432"
     volumes:
@@ -18,19 +19,42 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7
-    container_name: newtest-redis
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: myapp-backend
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/myapp
+      SECRET_KEY: your-secret-key-change-this-in-production
+      BACKEND_CORS_ORIGINS: '["http://localhost:3000","http://localhost:8000"]'
     ports:
-      - "6379:6379"
+      - "8000:8000"
     volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: myapp-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    command: npm run dev
 
 volumes:
   postgres_data:
-  redis_data:

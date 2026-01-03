@@ -1,3 +1,6 @@
+/**
+ * API Client Configuration
+ */
 import axios from 'axios'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
@@ -7,17 +10,18 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true,
 })
 
-// 요청 인터셉터
+// Request interceptor - Add auth token
 api.interceptors.request.use(
   (config) => {
-    // 토큰이 있으면 헤더에 추가 (추후 인증 구현 시)
-    // const token = localStorage.getItem('access_token')
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`
-    // }
+    // Get token from localStorage
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('auth_token')
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+      }
+    }
     return config
   },
   (error) => {
@@ -25,15 +29,18 @@ api.interceptors.request.use(
   }
 )
 
-// 응답 인터셉터
+// Response interceptor - Handle errors
 api.interceptors.response.use(
   (response) => {
     return response
   },
-  async (error) => {
+  (error) => {
     if (error.response?.status === 401) {
-      // 인증 실패 시 처리 (추후 구현)
-      // 로그인 페이지로 리다이렉트 등
+      // Unauthorized - clear token and redirect to login
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('auth_token')
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   }

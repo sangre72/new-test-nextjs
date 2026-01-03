@@ -1,79 +1,64 @@
 """
-FastAPI 메인 애플리케이션
-
-설정:
-- CORS 활성화
-- 테넌트 미들웨어
-- API v1 라우터 등록
+FastAPI Main Application
 """
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.tenant_middleware import TenantDetectionMiddleware
-from app.api.v1_tenants import router as tenants_router
+from app.api.v1 import api_router
 
+# Create FastAPI app
 app = FastAPI(
-    title="New Test API",
-    description="FastAPI + Next.js 프로젝트",
-    version="1.0.0",
+    title=settings.PROJECT_NAME,
+    version=settings.VERSION,
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
-# ============================================================
-# CORS 설정
-# ============================================================
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS middleware
+if settings.BACKEND_CORS_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-# ============================================================
-# 커스텀 미들웨어
-# ============================================================
-app.add_middleware(TenantDetectionMiddleware)
-
-# ============================================================
-# 헬스 체크
-# ============================================================
+# Include API router
+app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")
-async def root():
-    """API 상태 확인"""
+def root():
+    """Root endpoint"""
     return {
-        "success": True,
-        "message": "New Test API is running",
-        "version": "1.0.0",
+        "message": f"Welcome to {settings.PROJECT_NAME}",
+        "version": settings.VERSION,
+        "docs": "/docs",
+        "redoc": "/redoc",
     }
 
 
-@app.get("/health")
-async def health_check():
-    """헬스 체크"""
-    return {
-        "success": True,
-        "status": "healthy",
-    }
+@app.on_event("startup")
+async def startup_event():
+    """Startup event handler"""
+    print(f"Starting {settings.PROJECT_NAME} v{settings.VERSION}")
+    print(f"Environment: {settings.ENVIRONMENT}")
+    print(f"API Docs: http://localhost:8000/docs")
 
 
-# ============================================================
-# API v1 라우터 등록
-# ============================================================
-app.include_router(tenants_router)
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Shutdown event handler"""
+    print(f"Shutting down {settings.PROJECT_NAME}")
 
-# 카테고리 라우터 등록
-try:
-    from app.api.v1.endpoints import categories_router
-    app.include_router(categories_router, prefix="/api/v1")
-except ImportError:
-    pass
 
-# 메뉴 라우터 등록
-try:
-    from app.api.v1.endpoints.menus import router as menus_router
-    app.include_router(menus_router, prefix="/api/v1", tags=["menus"])
-except ImportError:
-    pass
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=settings.ENVIRONMENT == "development",
+    )

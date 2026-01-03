@@ -1,618 +1,456 @@
-# New Test Project - Claude Code 가이드
+# 프로젝트 개요
 
-## 프로젝트 정보
+FastAPI + Next.js + PostgreSQL 기반 웹 애플리케이션
 
-- **기술 스택**: FastAPI + Next.js 15 + TypeScript + PostgreSQL
-- **생성일**: 2026-01-03
-- **인증 방식**: 휴대폰 인증 (OTP) + 소셜 로그인
-- **데이터베이스**: PostgreSQL + Redis
+## 기술 스택
 
----
+### Backend
+- **Python**: 3.11+
+- **FastAPI**: 0.128.0
+- **SQLAlchemy**: 2.0+ (ORM)
+- **Alembic**: 1.13+ (DB Migration)
+- **Pydantic**: 2.0+ (Validation)
+- **PostgreSQL**: 15+
 
-## 개발 원칙
+### Frontend
+- **React**: 19.2.3
+- **Next.js**: 16.1.1 (App Router)
+- **TypeScript**: 5.0+
+- **TanStack Query**: 5.90.16 (React Query)
+- **Tailwind CSS**: 3.4+
+- **Axios**: 1.6+
 
-### Security First (보안 우선)
-- 모든 사용자 입력 검증 (SQL Injection, XSS 방지)
-- Parameterized Query 필수 (SQLAlchemy ORM 사용)
-- 비밀번호는 bcrypt로 해싱 (passlib 사용)
-- JWT는 python-jose[cryptography] 사용
-- API 키는 환경변수로 관리 (.env)
-- httpOnly 쿠키로 토큰 저장 (XSS 방지)
-- 인증번호는 개발모드에서 000000 고정 허용
-
-### Error Handling First (오류 처리 우선)
-- 모든 외부 호출에 try-except
-- 적절한 에러 응답 (error_code, message)
-- 로깅 (민감 정보 제외)
-- 프로덕션에서 스택 트레이스 노출 금지
-
-### API 응답 표준 형식
-```typescript
-// 성공 응답
-{
-  "success": true,
-  "data": { ... }
-}
-
-// 실패 응답
-{
-  "success": false,
-  "error_code": "INVALID_INPUT",
-  "message": "이메일 형식이 올바르지 않습니다."
-}
-```
-
-| Error Code | HTTP Status | 설명 |
-|------------|-------------|------|
-| `DATABASE_UNAVAILABLE` | 503 | DB 연결 실패 |
-| `ACCESS_DENIED` | 403 | 권한 없음 |
-| `INVALID_INPUT` | 400 | 입력값 검증 실패 |
-| `NOT_FOUND` | 404 | 리소스 없음 |
-| `INVALID_CREDENTIALS` | 401 | 인증 실패 |
-| `INTERNAL_ERROR` | 500 | 서버 내부 오류 |
-
----
-
-## 사용 가능한 Skills
-
-### Git 관련
-| 스킬 | 설명 | 사용법 |
-|------|------|--------|
-| `gitpush` | 자동 커밋 + push | `/gitpush` |
-| `gitpull` | dev merge + pull | `/gitpull` |
-
-### 코드 품질
-| 스킬 | 설명 | 사용법 |
-|------|------|--------|
-| `coding-guide` | 코드 품질, 보안 규칙 | 자동 적용 |
-| `refactor` | 모듈화/타입 리팩토링 | `/refactor` `/refactor --fix` |
-| `modular-check` | 모듈화 상태 분석 | `/modular-check` |
-
----
-
-## 사용 가능한 Agents
-
-### 최우선 (순서대로 실행)
-
-| 순서 | 에이전트 | 설명 | 사용법 |
-|------|----------|------|--------|
-| 1 | `shared-schema` | 공유 테이블 초기화 | `Use shared-schema --init` |
-| 2 | `tenant-manager` | 테넌트(멀티사이트) 관리 | `Use tenant-manager --init` |
-| 3 | `category-manager` | 카테고리 관리 | `Use category-manager --init` |
-
-### 인증
-
-| 에이전트 | 설명 | 사용법 |
-|----------|------|--------|
-| `auth-backend` | 인증 Backend API | `Use auth-backend --init` |
-| `auth-frontend` | 인증 Frontend UI | `Use auth-frontend --init` |
-
-**지원 인증 방식:**
-- 휴대폰 번호 인증 (OTP) - 권장
-- 이메일/비밀번호 인증
-- 소셜 로그인 (카카오, 네이버, 구글)
-
-### 메뉴 관리
-
-| 에이전트 | 설명 | 사용법 |
-|----------|------|--------|
-| `menu-manager` | 통합 메뉴 관리 (프로토콜 문서) | `Use menu-manager --init` |
-| `menu-backend` | 메뉴 Backend API | `Use menu-backend --init` |
-| `menu-frontend` | 메뉴 Frontend UI | `Use menu-frontend --init` |
-
-**메뉴 타입**: site, user, admin, header_utility, footer_utility
-
-### 게시판
-
-| 에이전트 | 설명 | 사용법 |
-|----------|------|--------|
-| `board-generator` | 멀티게시판 오케스트레이터 | `Use board-generator --init` |
-| `board-schema` | DB 스키마 정의 (공유) | 참조용 |
-| `board-templates` | 템플릿 정의 (공유) | 참조용 |
-| `board-frontend-pages` | 페이지 템플릿 (공유) | 참조용 |
-| `board-attachments` | 파일 첨부 기능 (공유) | 참조용 |
-
-**템플릿**: notice, free, qna, gallery, faq, review
-
----
-
-## 초기화 순서
-
-```bash
-# 1. 공유 스키마 (필수 - 가장 먼저)
-Use shared-schema --init
-
-# 2. 인증 시스템 (휴대폰 인증 권장)
-Use auth-backend --init --type=phone
-Use auth-frontend --init
-
-# 3. 소셜 로그인 추가 (선택)
-Use auth-backend --feature=social-kakao
-Use auth-backend --feature=social-naver
-Use auth-backend --feature=social-google
-
-# 4. 테넌트 관리 (멀티사이트 필요 시)
-Use tenant-manager --init
-
-# 5. 카테고리 관리 (게시판 분류 필요 시)
-Use category-manager --init
-
-# 6. 메뉴 관리
-Use menu-backend --init
-Use menu-frontend --init
-Use menu-manager --type=site       # 사이트 메뉴 (GNB)
-Use menu-manager --type=user       # 마이페이지 메뉴
-Use menu-manager --utility=header  # 헤더 유틸리티
-
-# 7. 게시판 시스템
-Use board-generator --init
-Use board-generator --template notice    # 공지사항
-Use board-generator --template free      # 자유게시판
-Use board-generator --template qna       # Q&A
-```
-
-**휴대폰 인증 흐름:**
-```
-1. POST /api/auth/send-code       → 인증번호 발송 (SMS)
-2. POST /api/auth/verify-code     → 인증번호 확인 (verification_token 발급)
-3. POST /api/auth/register        → 회원가입 (verification_token 필요)
-4. POST /api/auth/login           → 로그인 (휴대폰 + 인증번호)
-```
-
-> **개발 모드**: 인증번호 `000000` 입력 시 항상 인증 통과
+### DevOps
+- **Docker & Docker Compose**
+- **PostgreSQL**: 15-alpine
 
 ---
 
 ## 프로젝트 구조
 
-### Backend (FastAPI)
-
 ```
-backend/
-├── alembic/                     # DB 마이그레이션
-│   ├── versions/
-│   └── env.py
-├── app/
-│   ├── api/
-│   │   ├── deps.py              # 의존성 (인증, DB 세션)
-│   │   └── v1/
-│   │       └── endpoints/
-│   │           ├── auth.py      # 인증 API
-│   │           ├── users.py     # 사용자 API
-│   │           ├── menus.py     # 메뉴 API
-│   │           └── boards.py    # 게시판 API
-│   ├── core/
-│   │   ├── config.py            # 환경 설정
-│   │   └── security.py          # JWT, 비밀번호 해싱
-│   ├── db/
-│   │   ├── base.py              # Base 클래스, TimestampMixin
-│   │   └── session.py           # DB 세션
-│   ├── models/
-│   │   ├── user.py              # User 모델
-│   │   ├── menu.py              # Menu 모델
-│   │   ├── board.py             # Board 모델
-│   │   ├── post.py              # Post 모델
-│   │   └── verification.py      # 인증번호 모델
-│   ├── schemas/
-│   │   ├── auth.py              # 인증 스키마
-│   │   ├── user.py              # 사용자 스키마
-│   │   ├── menu.py              # 메뉴 스키마
-│   │   └── board.py             # 게시판 스키마
-│   ├── services/
-│   │   ├── auth.py              # 인증 서비스
-│   │   ├── sms.py               # SMS 발송 서비스
-│   │   └── menu.py              # 메뉴 서비스
-│   └── main.py                  # FastAPI 앱
-├── requirements.txt
-└── .env
-```
-
-### Frontend (Next.js 15)
-
-```
-frontend/
-├── src/
-│   ├── app/                     # Next.js App Router
-│   │   ├── (auth)/              # 인증 그룹
-│   │   │   ├── login/
-│   │   │   │   └── page.tsx
-│   │   │   └── register/
-│   │   │       └── page.tsx
-│   │   ├── mypage/              # 마이페이지
+/Users/bumsuklee/git/new-test/
+├── backend/                 # FastAPI 백엔드
+│   ├── app/
+│   │   ├── api/            # API 엔드포인트
+│   │   │   ├── v1/
+│   │   │   │   └── endpoints/
+│   │   │   ├── deps.py     # 의존성 주입
+│   │   │   └── tenant_middleware.py
+│   │   ├── core/           # 설정 및 보안
+│   │   │   └── config.py
+│   │   ├── db/             # 데이터베이스
+│   │   │   ├── session.py
+│   │   │   ├── base.py
+│   │   │   └── init_shared_schema.py
+│   │   ├── models/         # SQLAlchemy 모델
+│   │   │   └── shared.py   # 공유 스키마 모델
+│   │   ├── schemas/        # Pydantic 스키마
+│   │   │   └── shared.py
+│   │   ├── services/       # 비즈니스 로직
+│   │   │   └── shared.py
+│   │   └── main.py
+│   ├── alembic/            # DB 마이그레이션
+│   │   └── versions/
+│   ├── tests/
+│   ├── requirements.txt
+│   └── .env.example
+│
+├── frontend/               # Next.js 프론트엔드
+│   ├── src/
+│   │   ├── app/           # App Router
+│   │   │   ├── layout.tsx
 │   │   │   └── page.tsx
-│   │   ├── admin/               # 관리자
-│   │   │   ├── menus/           # 메뉴 관리
-│   │   │   └── boards/          # 게시판 관리
-│   │   ├── boards/              # 게시판 목록
-│   │   │   └── [boardCode]/
-│   │   │       ├── page.tsx     # 게시글 목록
-│   │   │       └── [postId]/
-│   │   │           └── page.tsx # 게시글 상세
-│   │   └── layout.tsx
-│   ├── components/
-│   │   ├── auth/                # 인증 컴포넌트
-│   │   │   ├── LoginForm.tsx
-│   │   │   ├── RegisterForm.tsx
-│   │   │   └── PhoneVerification.tsx
-│   │   ├── admin/
-│   │   │   └── menu/            # 메뉴 관리 컴포넌트
-│   │   │       ├── MenuManager.tsx
-│   │   │       ├── MenuTree.tsx
-│   │   │       └── MenuForm.tsx
-│   │   ├── board/               # 게시판 컴포넌트
-│   │   │   ├── BoardList.tsx
-│   │   │   ├── PostDetail.tsx
-│   │   │   ├── PostForm.tsx
-│   │   │   └── CommentList.tsx
-│   │   └── ui/                  # 공통 UI (shadcn/ui)
-│   ├── hooks/
-│   │   ├── useAuth.ts           # 인증 훅
-│   │   ├── useMenu.ts           # 메뉴 훅
-│   │   └── useBoard.ts          # 게시판 훅
-│   ├── lib/
-│   │   ├── api.ts               # API 클라이언트
-│   │   └── utils.ts             # 유틸리티
-│   ├── stores/
-│   │   └── authStore.ts         # 인증 상태 (Zustand)
-│   └── types/
-│       ├── auth.ts              # 인증 타입
-│       ├── user.ts              # 사용자 타입
-│       ├── menu.ts              # 메뉴 타입
-│       └── board.ts             # 게시판 타입
-├── public/
-├── package.json
-└── .env.local
+│   │   ├── components/    # React 컴포넌트
+│   │   ├── lib/          # 유틸리티
+│   │   │   └── api/      # API 클라이언트
+│   │   └── types/        # TypeScript 타입
+│   ├── public/
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── tailwind.config.js
+│   ├── next.config.js
+│   └── .env.local.example
+│
+├── docker-compose.yml
+├── .gitignore
+└── CLAUDE.md (이 파일)
 ```
 
 ---
 
-## 코딩 규칙
+## 빠른 시작
 
-### 네이밍 컨벤션
-
-| 구분 | 규칙 | 예시 |
-|------|------|------|
-| 컴포넌트/클래스 | PascalCase | `MenuManager`, `AuthHandler` |
-| 변수/함수 | camelCase | `getAllMenus`, `isLoading` |
-| 상수 | UPPER_SNAKE_CASE | `API_BASE_URL`, `MAX_RETRIES` |
-| Boolean | is/has/should 접두사 | `isActive`, `hasPermission` |
-| API 엔드포인트 | kebab-case | `/api/send-code`, `/api/user-profile` |
-
-### 필수 감사 컬럼 (TimestampMixin)
-
-모든 테이블에 다음 컬럼 포함:
-
-```python
-# app/db/base.py
-from sqlalchemy import Column, DateTime, String, Boolean
-from sqlalchemy.sql import func
-
-class TimestampMixin:
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    created_by = Column(String(100), nullable=True)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
-    updated_by = Column(String(100), nullable=True)
-    is_active = Column(Boolean, default=True, nullable=False)
-    is_deleted = Column(Boolean, default=False, nullable=False)
-```
-
-### Import 순서
-
-1. 표준 라이브러리 (os, sys 등)
-2. 외부 라이브러리 (fastapi, sqlalchemy 등)
-3. 내부 패키지 (app.models, app.schemas 등)
-4. 타입 import (from typing import ...)
-
-```python
-# Good
-import os
-from datetime import datetime
-
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.api.deps import get_db, get_current_user
-from app.models.user import User
-from app.schemas.auth import LoginRequest
-
-from typing import Optional, List
-```
-
----
-
-## 환경 변수 설정
-
-### Backend (.env)
-
-```bash
-# Database
-DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/newtest
-
-# Redis
-REDIS_URL=redis://localhost:6379/0
-
-# JWT
-SECRET_KEY=your-secret-key-change-in-production-min-32-chars
-JWT_EXPIRES_IN=1h
-JWT_REFRESH_EXPIRES_IN=7d
-
-# SMS (프로덕션 전용)
-SMS_API_KEY=
-SMS_SENDER_NUMBER=
-
-# 소셜 로그인
-KAKAO_CLIENT_ID=
-KAKAO_CLIENT_SECRET=
-NAVER_CLIENT_ID=
-NAVER_CLIENT_SECRET=
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-
-# 개발 모드
-DEV_MODE=true
-DEV_VERIFICATION_CODE=000000
-
-# CORS
-CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
-```
-
-### Frontend (.env.local)
-
-```bash
-# API URL
-NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
-
-# 소셜 로그인
-NEXT_PUBLIC_KAKAO_CLIENT_ID=
-NEXT_PUBLIC_NAVER_CLIENT_ID=
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=
-
-# 지도 (선택)
-NEXT_PUBLIC_KAKAO_MAP_KEY=
-```
-
----
-
-## API 엔드포인트
-
-### 인증 (Authentication)
-
-| Method | Endpoint | 설명 | 권한 |
-|--------|----------|------|------|
-| POST | `/api/auth/send-code` | 휴대폰/이메일 인증번호 발송 | Public |
-| POST | `/api/auth/verify-code` | 인증번호 확인 | Public |
-| POST | `/api/auth/register` | 회원가입 | Public |
-| POST | `/api/auth/login` | 로그인 (이메일/비밀번호) | Public |
-| POST | `/api/auth/phone-login` | 휴대폰 인증 로그인 | Public |
-| POST | `/api/auth/logout` | 로그아웃 | User |
-| POST | `/api/auth/refresh` | 토큰 갱신 | User |
-| GET | `/api/auth/me` | 현재 사용자 정보 | User |
-| PUT | `/api/auth/profile` | 프로필 수정 | User |
-| PUT | `/api/auth/password` | 비밀번호 변경 | User |
-| DELETE | `/api/auth/withdraw` | 회원 탈퇴 | User |
-| POST | `/api/auth/kakao` | 카카오 로그인 | Public |
-| POST | `/api/auth/naver` | 네이버 로그인 | Public |
-| POST | `/api/auth/google` | 구글 로그인 | Public |
-
-### 메뉴 관리 (Menu Management)
-
-| Method | Endpoint | 설명 | 권한 |
-|--------|----------|------|------|
-| GET | `/api/menus` | 사용자용 메뉴 조회 | Public |
-| GET | `/api/menus/:type` | 타입별 메뉴 조회 | Public |
-| GET | `/api/admin/menus` | 메뉴 목록 조회 | Admin |
-| GET | `/api/admin/menus/:id` | 메뉴 상세 조회 | Admin |
-| POST | `/api/admin/menus` | 메뉴 생성 | Admin |
-| PUT | `/api/admin/menus/:id` | 메뉴 수정 | Admin |
-| DELETE | `/api/admin/menus/:id` | 메뉴 삭제 (Soft Delete) | Admin |
-| PUT | `/api/admin/menus/reorder` | 메뉴 순서 변경 | Admin |
-| PUT | `/api/admin/menus/:id/move` | 메뉴 이동 (부모 변경) | Admin |
-
-### 게시판 (Board)
-
-| Method | Endpoint | 설명 | 권한 |
-|--------|----------|------|------|
-| GET | `/api/boards` | 게시판 목록 조회 | Public |
-| GET | `/api/boards/:boardCode` | 게시판 상세 | Public |
-| GET | `/api/boards/:boardCode/posts` | 게시글 목록 | Public |
-| GET | `/api/posts/:id` | 게시글 상세 | Public |
-| POST | `/api/posts` | 게시글 작성 | User |
-| PUT | `/api/posts/:id` | 게시글 수정 | Owner/Admin |
-| DELETE | `/api/posts/:id` | 게시글 삭제 | Owner/Admin |
-| POST | `/api/posts/:id/comments` | 댓글 작성 | User |
-| PUT | `/api/comments/:id` | 댓글 수정 | Owner/Admin |
-| DELETE | `/api/comments/:id` | 댓글 삭제 | Owner/Admin |
-| POST | `/api/posts/:id/like` | 좋아요/추천 | User |
-| POST | `/api/attachments/upload` | 파일 업로드 | User |
-
----
-
-## 자주 쓰는 명령
-
-```bash
-# === 프로젝트 초기화 ===
-Use shared-schema --init                   # 공유 테이블 생성
-Use auth-backend --init --type=phone       # 휴대폰 인증 Backend
-Use auth-frontend --init                   # 인증 Frontend
-
-# === 인증 시스템 ===
-Use auth-backend --feature=social-kakao    # 카카오 소셜 로그인 추가
-Use auth-backend --feature=social-naver    # 네이버 소셜 로그인 추가
-Use auth-frontend --page=phone-login       # 휴대폰 로그인 페이지
-
-# === 메뉴 관리 ===
-Use menu-backend --init                    # 메뉴 Backend API
-Use menu-frontend --init                   # 메뉴 Frontend UI
-Use menu-manager --type=site               # 사이트 메뉴 (GNB) 생성
-Use menu-manager --type=user               # 마이페이지 메뉴 생성
-Use menu-manager --type=admin              # 관리자 메뉴 생성
-Use menu-manager --utility=header          # 헤더 유틸리티
-Use menu-manager to add menu "메뉴명"       # 메뉴 추가
-
-# === 게시판 생성 ===
-Use board-generator --init                 # 게시판 시스템 초기화
-Use board-generator --template notice      # 공지사항 템플릿
-Use board-generator --template free        # 자유게시판 템플릿
-Use board-generator --template qna         # Q&A 템플릿
-Use board-generator to create "게시판명"    # 커스텀 게시판
-
-# === Git ===
-/gitpush                                   # 커밋 + push
-/gitpull                                   # dev merge + pull
-
-# === 개발 환경 ===
-/dev-setup                                 # Docker, 의존성 설치
-/lint --fix                                # 린트 오류 수정
-/test                                      # 테스트 실행
-/db-migrate --generate "설명"              # 마이그레이션 생성
-```
-
----
-
-## 개발 시작하기
-
-### 1. 의존성 설치
+### 1. 환경 변수 설정
 
 ```bash
 # Backend
+cp backend/.env.example backend/.env
+# DATABASE_URL, SECRET_KEY 등 수정
+
+# Frontend
+cp frontend/.env.local.example frontend/.env.local
+# NEXT_PUBLIC_API_URL 수정
+```
+
+### 2. Docker로 시작 (권장)
+
+```bash
+# PostgreSQL + Backend + Frontend 모두 실행
+docker-compose up -d
+
+# 로그 확인
+docker-compose logs -f
+```
+
+### 3. 로컬 개발 모드
+
+#### Backend
+```bash
 cd backend
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-# Frontend
+# DB 마이그레이션
+alembic upgrade head
+
+# 서버 실행 (http://localhost:8000)
+uvicorn app.main:app --reload
+```
+
+#### Frontend
+```bash
 cd frontend
 npm install
+npm run dev  # http://localhost:3000
 ```
-
-### 2. 데이터베이스 설정
-
-```bash
-# PostgreSQL 설치 (Docker 사용 권장)
-docker run -d \
-  --name postgres \
-  -e POSTGRES_PASSWORD=password \
-  -e POSTGRES_DB=newtest \
-  -p 5432:5432 \
-  postgres:15
-
-# Redis 설치
-docker run -d \
-  --name redis \
-  -p 6379:6379 \
-  redis:7
-
-# 마이그레이션 실행
-cd backend
-alembic upgrade head
-```
-
-### 3. 서버 실행
-
-```bash
-# Backend
-cd backend
-uvicorn app.main:app --reload --port 8000
-
-# Frontend
-cd frontend
-npm run dev
-```
-
-### 4. 접속
-
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
 
 ---
 
-## 필수 Python 패키지
+## 데이터베이스 스키마
 
-```txt
-# requirements.txt (backend)
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
-sqlalchemy[asyncio]>=2.0.0
-asyncpg>=0.29.0
-alembic>=1.13.0
-python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.4
-pydantic>=2.5.0
-pydantic-settings>=2.1.0
-python-multipart>=0.0.6
-httpx>=0.26.0
-redis>=5.0.0
+### Shared Schema (공유 데이터)
+- `tenants`: 테넌트(사이트) 관리
+- `categories`: 카테고리 관리 (계층 구조 지원)
+- `menus`: 메뉴 관리
+- `users`: 사용자
+- `roles`: 역할
+- `permissions`: 권한
+
+### Tenant Schema (사이트별 격리 데이터)
+- 각 테넌트는 독립적인 스키마를 가짐
+- 예: `tenant_abc` 스키마에 `posts`, `comments` 등
+
+---
+
+## 사용 가능한 Claude Agents/Skills
+
+프로젝트 개발 시 다음 명령어로 각 기능을 자동 생성/관리할 수 있습니다:
+
+### 핵심 시스템
+
+#### 1. Shared Schema (공유 스키마)
+```bash
+Use shared-schema --init
+Use shared-schema --add-table tablename
+```
+- 테넌트, 사용자, 역할, 권한 등 공유 데이터 관리
+- 멀티테넌트 기본 구조 생성
+
+#### 2. Tenant Manager (테넌트 관리)
+```bash
+Use tenant-manager --init
+Use tenant-manager --add-feature schema-isolation
+```
+- 멀티사이트/멀티테넌트 관리
+- 도메인별 설정, 테마, 스키마 격리
+
+#### 3. Auth Backend (인증 백엔드)
+```bash
+Use auth-backend --init --type=phone
+Use auth-backend --init --type=email
+Use auth-backend --init --type=social --providers=kakao,naver,google
+```
+- JWT 토큰 기반 인증
+- 휴대폰 OTP, 이메일/비밀번호, 소셜 로그인
+
+#### 4. Auth Frontend (인증 프론트엔드)
+```bash
+Use auth-frontend --init
+Use auth-frontend --add-social kakao
+```
+- 로그인/회원가입 UI
+- 토큰 관리, 자동 갱신
+
+#### 5. Menu Backend (메뉴 관리 백엔드)
+```bash
+Use menu-backend --init
+Use menu-backend --add-feature multi-level
+```
+- 계층형 메뉴 구조
+- 권한 기반 메뉴 표시
+
+#### 6. Menu Frontend (메뉴 관리 프론트엔드)
+```bash
+Use menu-frontend --init
+Use menu-frontend --add-component mobile-drawer
+```
+- 반응형 네비게이션
+- 관리자 메뉴 편집기
+
+#### 7. Category Manager (카테고리 관리)
+```bash
+Use category-manager --init
+Use category-manager --add-feature drag-drop
+```
+- 무한 깊이 계층 구조
+- 드래그&드롭 정렬
+
+### 게시판 시스템
+
+#### 8. Board Generator (게시판 생성기)
+```bash
+Use board-generator --template notice      # 공지사항
+Use board-generator --template free        # 자유게시판
+Use board-generator --template qna         # Q&A
+Use board-generator --template faq         # FAQ
+Use board-generator --template gallery     # 갤러리
+Use board-generator --template review      # 리뷰
+Use board-generator --custom               # 커스텀 게시판
+```
+- 템플릿 기반 게시판 자동 생성
+- CRUD, 검색, 페이징, 첨부파일
+
+### 유틸리티
+
+#### 9. API Generator (API 자동 생성)
+```bash
+Use api-generator --model User --crud
+Use api-generator --from-schema schema.yaml
+```
+- REST API CRUD 자동 생성
+- OpenAPI 문서 자동화
+
+#### 10. Component Generator (컴포넌트 생성)
+```bash
+Use component-generator --type form --name UserForm
+Use component-generator --type table --name UserTable
+```
+- React 컴포넌트 템플릿 생성
+- Form, Table, Modal 등
+
+---
+
+## API 문서
+
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+---
+
+## 환경 변수
+
+### Backend (.env)
+```env
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+
+# Security
+SECRET_KEY=your-secret-key-min-32-chars
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# CORS
+BACKEND_CORS_ORIGINS=["http://localhost:3000"]
+
+# Multi-tenancy
+ENABLE_MULTI_TENANCY=true
+DEFAULT_TENANT_SCHEMA=public
+```
+
+### Frontend (.env.local)
+```env
+# API
+NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+
+# Auth
+NEXT_PUBLIC_AUTH_STORAGE_KEY=auth_token
+
+# Social Login (선택)
+NEXT_PUBLIC_KAKAO_APP_KEY=your_kakao_key
+NEXT_PUBLIC_NAVER_CLIENT_ID=your_naver_id
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_id
+```
+
+---
+
+## 개발 워크플로우
+
+### 1. 새 기능 개발
+```bash
+# 1. Feature 브랜치 생성
+git checkout -b feature/new-feature
+
+# 2. Backend: API 엔드포인트 작성
+# - app/api/v1/endpoints/new_feature.py
+# - app/models/new_feature.py
+# - app/schemas/new_feature.py
+# - app/services/new_feature.py
+
+# 3. DB 마이그레이션 생성
+cd backend
+alembic revision --autogenerate -m "Add new_feature table"
+alembic upgrade head
+
+# 4. Frontend: 컴포넌트 작성
+# - src/components/NewFeature.tsx
+# - src/lib/api/newFeature.ts
+
+# 5. 테스트
+cd backend && pytest
+cd frontend && npm test
+
+# 6. 커밋 & PR
+git add .
+git commit -m "feat: Add new feature"
+git push origin feature/new-feature
+```
+
+### 2. DB 스키마 변경
+```bash
+cd backend
+
+# 모델 수정 후 마이그레이션 생성
+alembic revision --autogenerate -m "Description"
+
+# 마이그레이션 검토
+cat alembic/versions/xxxxx_description.py
+
+# 적용
+alembic upgrade head
+
+# 롤백 (필요시)
+alembic downgrade -1
+```
+
+### 3. 테스트
+```bash
+# Backend
+cd backend
+pytest tests/ -v
+
+# Frontend
+cd frontend
+npm test
+npm run test:e2e  # E2E 테스트 (설정 필요)
+```
+
+---
+
+## 배포
+
+### Docker로 배포
+```bash
+# 프로덕션 빌드
+docker-compose -f docker-compose.prod.yml up -d
+
+# 또는 개별 빌드
+docker build -t myapp-backend ./backend
+docker build -t myapp-frontend ./frontend
+```
+
+### 환경별 설정
+- **개발**: `.env`, `.env.local`
+- **스테이징**: `.env.staging`
+- **프로덕션**: `.env.production` (절대 커밋하지 말 것)
+
+---
+
+## 문제 해결
+
+### Backend 문제
+
+#### DB 연결 실패
+```bash
+# PostgreSQL 실행 확인
+docker-compose ps
+# 또는
+pg_isready -h localhost -p 5432
+
+# DATABASE_URL 확인
+cat backend/.env | grep DATABASE_URL
+```
+
+#### 마이그레이션 에러
+```bash
+# 마이그레이션 히스토리 확인
+alembic history
+
+# 현재 버전 확인
+alembic current
+
+# 초기화 (주의: 데이터 손실)
+alembic downgrade base
+alembic upgrade head
+```
+
+### Frontend 문제
+
+#### API 호출 실패
+```bash
+# API URL 확인
+cat frontend/.env.local | grep NEXT_PUBLIC_API_URL
+
+# CORS 설정 확인 (backend/.env)
+cat backend/.env | grep CORS
+```
+
+#### 빌드 에러
+```bash
+# 캐시 삭제 후 재설치
+cd frontend
+rm -rf .next node_modules
+npm install
+npm run dev
 ```
 
 ---
 
 ## 다음 단계
 
-1. **공유 스키마 초기화**
+1. 환경 변수 설정 완료
+2. Docker Compose로 전체 스택 실행
+3. 필요한 Agent 호출하여 기능 추가:
    ```bash
-   Use shared-schema --init
-   ```
-
-2. **인증 시스템 구축**
-   ```bash
-   Use auth-backend --init --type=phone
+   Use auth-backend --init --type=email
    Use auth-frontend --init
-   ```
-
-3. **메뉴 관리 시스템 구축**
-   ```bash
    Use menu-backend --init
    Use menu-frontend --init
-   Use menu-manager --type=site
-   ```
-
-4. **게시판 생성**
-   ```bash
-   Use board-generator --init
+   Use category-manager --init
    Use board-generator --template notice
    ```
+4. API 문서 확인 (http://localhost:8000/docs)
+5. 프론트엔드 접속 (http://localhost:3000)
 
 ---
 
-## 참고 문서
+## 참고 자료
 
 - [FastAPI 공식 문서](https://fastapi.tiangolo.com/)
-- [Next.js 15 문서](https://nextjs.org/docs)
-- [SQLAlchemy 2.0 문서](https://docs.sqlalchemy.org/en/20/)
-- [Pydantic 문서](https://docs.pydantic.dev/)
-- [Tailwind CSS](https://tailwindcss.com/docs)
+- [Next.js 공식 문서](https://nextjs.org/docs)
+- [SQLAlchemy 공식 문서](https://docs.sqlalchemy.org/)
+- [TanStack Query 공식 문서](https://tanstack.com/query/latest)
+- [PostgreSQL 공식 문서](https://www.postgresql.org/docs/)
 
 ---
 
-## 에이전트 참조
+## 라이선스
 
-이 프로젝트는 다음 에이전트들을 사용합니다:
+MIT License
 
-**최우선 (순서대로):**
-- `~/.claude/agents/shared-schema.md` (공유 테이블)
-- `~/.claude/agents/tenant-manager.md` (테넌트/멀티사이트)
-- `~/.claude/agents/category-manager.md` (카테고리 관리)
+---
 
-**인증:**
-- `~/.claude/agents/auth-backend.md`
-- `~/.claude/agents/auth-frontend.md`
-
-**메뉴 관리:**
-- `~/.claude/agents/menu-manager.md` (프로토콜 문서)
-- `~/.claude/agents/menu-backend.md`
-- `~/.claude/agents/menu-frontend.md`
-
-**게시판:**
-- `~/.claude/agents/board-generator.md` (오케스트레이터)
-- `~/.claude/agents/board-schema.md` (DB 스키마)
-- `~/.claude/agents/board-templates.md` (템플릿)
-- `~/.claude/agents/board-frontend-pages.md` (페이지 템플릿)
-- `~/.claude/agents/board-attachments.md` (파일 첨부)
-
-**스킬:**
-- `~/.claude/skills/coding-guide/`
-- `~/.claude/skills/gitpush/`
-- `~/.claude/skills/gitpull/`
-- `~/.claude/skills/refactor/`
-- `~/.claude/skills/modular-check/`
+**생성 일시**: 2026-01-03
+**Claude Code Agent**: project-init v1.0

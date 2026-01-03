@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { Providers } from './providers'
 
 export const metadata: Metadata = {
-  title: 'New Test Project',
-  description: 'FastAPI + Next.js 프로젝트',
+  title: 'MyApp',
+  description: 'FastAPI + Next.js Application',
 }
 
 export default function RootLayout({
@@ -13,7 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   )
 }

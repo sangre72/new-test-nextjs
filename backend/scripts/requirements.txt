@@ -1,0 +1,3 @@
+# Scripts dependencies
+# This file contains dependencies specifically for database and management scripts
+# Main application dependencies are in ../requirements.txt
