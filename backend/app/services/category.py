@@ -6,7 +6,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy import select, and_, func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from app.models.shared import Board
+from app.models.board import BoardExtended as Board
 from app.models.category import Category
 from app.schemas.category import (
     CategoryCreate,

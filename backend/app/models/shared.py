@@ -131,7 +131,7 @@ class Tenant(Base, AuditMixin):
 
     # Status
     status: Mapped[str] = mapped_column(
-        SQLEnum(TenantStatusEnum),
+        SQLEnum(TenantStatusEnum, values_callable=lambda x: [e.value for e in x]),
         default=TenantStatusEnum.ACTIVE,
         nullable=False
     )
@@ -185,7 +185,7 @@ class User(Base, AuditMixin):
 
     # Status
     status: Mapped[str] = mapped_column(
-        SQLEnum(UserStatusEnum),
+        SQLEnum(UserStatusEnum, values_callable=lambda x: [e.value for e in x]),
         default=UserStatusEnum.ACTIVE,
         nullable=False
     )
@@ -211,12 +211,14 @@ class User(Base, AuditMixin):
     group_memberships = relationship(
         "UserGroupMember",
         back_populates="user",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
+        overlaps="user_groups,users"
     )
     role_assignments = relationship(
         "UserRole",
         back_populates="user",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
+        overlaps="roles,users"
     )
 
     # Indexes
@@ -260,7 +262,7 @@ class UserGroup(Base, AuditMixin):
         comment="Higher priority means higher precedence"
     )
     group_type: Mapped[str] = mapped_column(
-        SQLEnum(UserGroupTypeEnum),
+        SQLEnum(UserGroupTypeEnum, values_callable=lambda x: [e.value for e in x]),
         default=UserGroupTypeEnum.CUSTOM,
         comment="system: built-in (immutable), custom: admin-created"
     )
@@ -270,12 +272,14 @@ class UserGroup(Base, AuditMixin):
     users = relationship(
         "User",
         secondary="user_group_members",
-        back_populates="user_groups"
+        back_populates="user_groups",
+        overlaps="group_memberships"
     )
     members = relationship(
         "UserGroupMember",
         back_populates="group",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
+        overlaps="user_groups,users"
     )
 
     # Indexes
@@ -319,8 +323,8 @@ class UserGroupMember(Base):
     created_by: Mapped[str] = mapped_column(String(100), nullable=True)
 
     # Relationships
-    user = relationship("User", back_populates="group_memberships")
-    group = relationship("UserGroup", back_populates="members")
+    user = relationship("User", back_populates="group_memberships", overlaps="user_groups,users")
+    group = relationship("UserGroup", back_populates="members", overlaps="user_groups,users")
 
     # Indexes
     __table_args__ = (
@@ -353,7 +357,7 @@ class Role(Base, AuditMixin):
         comment="Higher priority means higher authority"
     )
     role_type: Mapped[str] = mapped_column(
-        SQLEnum(RoleTypeEnum),
+        SQLEnum(RoleTypeEnum, values_callable=lambda x: [e.value for e in x]),
         default=RoleTypeEnum.BOTH,
         comment="admin: admin-only, user: user-only, both: both"
     )
@@ -362,22 +366,26 @@ class Role(Base, AuditMixin):
     users = relationship(
         "User",
         secondary="user_roles",
-        back_populates="roles"
+        back_populates="roles",
+        overlaps="role_assignments"
     )
     permissions = relationship(
         "Permission",
         secondary="role_permissions",
-        back_populates="roles"
+        back_populates="roles",
+        overlaps="role_permissions"
     )
     role_assignments = relationship(
         "UserRole",
         back_populates="role",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
+        overlaps="roles,users"
     )
     role_permissions = relationship(
         "RolePermission",
         back_populates="role",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
+        overlaps="permissions,roles"
     )
 
     # Indexes
@@ -419,8 +427,8 @@ class UserRole(Base):
     created_by: Mapped[str] = mapped_column(String(100), nullable=True)
 
     # Relationships
-    user = relationship("User", back_populates="role_assignments")
-    role = relationship("Role", back_populates="role_assignments")
+    user = relationship("User", back_populates="role_assignments", overlaps="roles,users")
+    role = relationship("Role", back_populates="role_assignments", overlaps="roles,users")
 
     # Indexes
     __table_args__ = (
@@ -448,12 +456,12 @@ class Permission(Base, AuditMixin):
 
     # Permission Details
     resource: Mapped[str] = mapped_column(
-        SQLEnum(PermissionResourceEnum),
+        SQLEnum(PermissionResourceEnum, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         comment="Resource this permission applies to"
     )
     action: Mapped[str] = mapped_column(
-        SQLEnum(PermissionActionEnum),
+        SQLEnum(PermissionActionEnum, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         comment="Action allowed on the resource"
     )
@@ -462,12 +470,14 @@ class Permission(Base, AuditMixin):
     roles = relationship(
         "Role",
         secondary="role_permissions",
-        back_populates="permissions"
+        back_populates="permissions",
+        overlaps="role_permissions"
     )
     role_permissions = relationship(
         "RolePermission",
         back_populates="permission",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
+        overlaps="permissions,roles"
     )
 
     # Indexes
@@ -509,8 +519,8 @@ class RolePermission(Base):
     created_by: Mapped[str] = mapped_column(String(100), nullable=True)
 
     # Relationships
-    role = relationship("Role", back_populates="role_permissions")
-    permission = relationship("Permission", back_populates="role_permissions")
+    role = relationship("Role", back_populates="role_permissions", overlaps="permissions,roles")
+    permission = relationship("Permission", back_populates="role_permissions", overlaps="permissions,roles")
 
     # Indexes
     __table_args__ = (
@@ -580,7 +590,7 @@ class Menu(Base, AuditMixin):
 
     # Menu Type
     menu_type: Mapped[str] = mapped_column(
-        SQLEnum(MenuTypeEnum),
+        SQLEnum(MenuTypeEnum, values_callable=lambda x: [e.value for e in x]),
         default=MenuTypeEnum.USER,
         nullable=False,
         comment="Menu type: user, site, admin"
@@ -600,7 +610,7 @@ class Menu(Base, AuditMixin):
 
     # Link Behavior
     link_type: Mapped[str] = mapped_column(
-        SQLEnum(MenuLinkTypeEnum),
+        SQLEnum(MenuLinkTypeEnum, values_callable=lambda x: [e.value for e in x]),
         default=MenuLinkTypeEnum.INTERNAL,
         nullable=False,
         comment="How the link should be opened"
@@ -635,7 +645,7 @@ class Menu(Base, AuditMixin):
 
     # Permission Settings
     permission_type: Mapped[str] = mapped_column(
-        SQLEnum(MenuPermissionTypeEnum),
+        SQLEnum(MenuPermissionTypeEnum, values_callable=lambda x: [e.value for e in x]),
         default=MenuPermissionTypeEnum.PUBLIC,
         nullable=False,
         comment="Permission requirement type"
@@ -650,7 +660,7 @@ class Menu(Base, AuditMixin):
     )
 
     # Metadata (JSON)
-    metadata: Mapped[dict] = mapped_column(
+    menu_metadata: Mapped[dict] = mapped_column(
         JSON,
         nullable=True,
         comment="Additional metadata (badge, tooltip, etc.)"

@@ -81,7 +81,7 @@ class BoardExtended(Base, AuditMixin):
 
     # Board Type
     board_type: Mapped[str] = mapped_column(
-        SQLEnum(BoardTypeEnum),
+        SQLEnum(BoardTypeEnum, values_callable=lambda x: [e.value for e in x]),
         default=BoardTypeEnum.FREE,
         nullable=False,
         comment="Board type (notice/free/qna/faq/gallery/review)"
@@ -89,19 +89,19 @@ class BoardExtended(Base, AuditMixin):
 
     # Permissions
     read_permission: Mapped[str] = mapped_column(
-        SQLEnum(PermissionLevelEnum),
+        SQLEnum(PermissionLevelEnum, values_callable=lambda x: [e.value for e in x]),
         default=PermissionLevelEnum.PUBLIC,
         nullable=False,
         comment="Read permission level"
     )
     write_permission: Mapped[str] = mapped_column(
-        SQLEnum(PermissionLevelEnum),
+        SQLEnum(PermissionLevelEnum, values_callable=lambda x: [e.value for e in x]),
         default=PermissionLevelEnum.MEMBER,
         nullable=False,
         comment="Write permission level"
     )
     comment_permission: Mapped[str] = mapped_column(
-        SQLEnum(PermissionLevelEnum),
+        SQLEnum(PermissionLevelEnum, values_callable=lambda x: [e.value for e in x]),
         default=PermissionLevelEnum.MEMBER,
         nullable=False,
         comment="Comment permission level"
@@ -304,7 +304,7 @@ class BoardPost(Base, AuditMixin):
 
     # Status
     status: Mapped[str] = mapped_column(
-        SQLEnum(PostStatusEnum),
+        SQLEnum(PostStatusEnum, values_callable=lambda x: [e.value for e in x]),
         default=PostStatusEnum.PUBLISHED,
         nullable=False
     )
@@ -374,7 +374,7 @@ class BoardPost(Base, AuditMixin):
     )
 
     # Metadata (JSON)
-    metadata: Mapped[dict] = mapped_column(
+    post_metadata: Mapped[dict] = mapped_column(
         JSON,
         nullable=True,
         comment="Additional metadata (tags, custom fields, etc.)"
@@ -459,7 +459,7 @@ class BoardComment(Base, AuditMixin):
 
     # Status
     status: Mapped[str] = mapped_column(
-        SQLEnum(CommentStatusEnum),
+        SQLEnum(CommentStatusEnum, values_callable=lambda x: [e.value for e in x]),
         default=CommentStatusEnum.PUBLISHED,
         nullable=False
     )

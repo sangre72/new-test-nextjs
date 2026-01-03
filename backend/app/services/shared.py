@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from app.models.shared import (
     Tenant, User, UserGroup, UserGroupMember, Role, UserRole,
-    Permission, RolePermission, Menu, Board
+    Permission, RolePermission, Menu
 )
+from app.models.board import BoardExtended as Board
 from app.schemas.shared import (
     TenantCreate, TenantUpdate, UserCreate, UserUpdate, UserGroupCreate, UserGroupUpdate,
     RoleCreate, RoleUpdate, PermissionCreate, PermissionUpdate,

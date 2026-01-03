@@ -92,7 +92,7 @@ def upgrade() -> None:
     ))
 
     op.add_column('menus', sa.Column(
-        'metadata',
+        'menu_metadata',
         postgresql.JSON(astext_type=sa.Text()),
         nullable=True,
         comment='Additional metadata (badge, tooltip, etc.)'
@@ -109,9 +109,9 @@ def upgrade() -> None:
     )
 
     # Add new indexes
-    op.create_index('idx_menu_type', 'menus', ['menu_type'])
-    op.create_index('idx_parent_id', 'menus', ['parent_id'])
-    op.create_index('idx_tenant_type_parent', 'menus', ['tenant_id', 'menu_type', 'parent_id'])
+    op.create_index('idx_menus_menu_type', 'menus', ['menu_type'])
+    op.create_index('idx_menus_parent_id', 'menus', ['parent_id'])
+    op.create_index('idx_menus_tenant_type_parent', 'menus', ['tenant_id', 'menu_type', 'parent_id'])
 
     # Add comments to existing columns
     op.alter_column('menus', 'tenant_id', comment='Tenant ID for multi-tenancy')
@@ -127,15 +127,15 @@ def downgrade() -> None:
     """Revert schema changes"""
 
     # Drop new indexes
-    op.drop_index('idx_tenant_type_parent', 'menus')
-    op.drop_index('idx_parent_id', 'menus')
-    op.drop_index('idx_menu_type', 'menus')
+    op.drop_index('idx_menus_tenant_type_parent', 'menus')
+    op.drop_index('idx_menus_parent_id', 'menus')
+    op.drop_index('idx_menus_menu_type', 'menus')
 
     # Drop foreign key constraint
     op.drop_constraint('fk_menus_parent_id', 'menus', type_='foreignkey')
 
     # Drop new columns
-    op.drop_column('menus', 'metadata')
+    op.drop_column('menus', 'menu_metadata')
     op.drop_column('menus', 'is_visible')
     op.drop_column('menus', 'permission_type')
     op.drop_column('menus', 'path')

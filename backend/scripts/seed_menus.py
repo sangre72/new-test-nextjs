@@ -275,7 +275,7 @@ def create_sample_menus(db: Session, tenant_id: int, user_id: int, username: str
             description=menu_data.get("description"),
             display_order=menu_data.get("display_order", 0),
             depth=depth,
-            metadata=menu_data.get("metadata"),
+            menu_metadata=menu_data.get("metadata"),
             is_visible=True,
             is_active=True,
             created_by=username,

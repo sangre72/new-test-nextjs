@@ -24,46 +24,10 @@ depends_on = None
 
 
 def upgrade() -> None:
-    """Create board-related tables"""
+    """Create board-related tables (posts, comments, attachments, likes)
 
-    # Drop existing boards table (it was a placeholder)
-    op.drop_table('boards')
-
-    # Create extended boards table
-    op.create_table(
-        'boards',
-        sa.Column('id', sa.BigInteger(), nullable=False),
-        sa.Column('tenant_id', sa.BigInteger(), nullable=False),
-        sa.Column('board_name', sa.String(100), nullable=False),
-        sa.Column('board_code', sa.String(50), nullable=False),
-        sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('board_type', sa.Enum('notice', 'free', 'qna', 'faq', 'gallery', 'review', name='boardtypeenum'), nullable=False, server_default='free'),
-        sa.Column('read_permission', sa.Enum('public', 'member', 'admin', 'disabled', name='permissionlevelenum'), nullable=False, server_default='public'),
-        sa.Column('write_permission', sa.Enum('public', 'member', 'admin', 'disabled', name='permissionlevelenum'), nullable=False, server_default='member'),
-        sa.Column('comment_permission', sa.Enum('public', 'member', 'admin', 'disabled', name='permissionlevelenum'), nullable=False, server_default='member'),
-        sa.Column('enable_categories', sa.Boolean(), nullable=False, server_default='true'),
-        sa.Column('enable_secret_post', sa.Boolean(), nullable=False, server_default='false'),
-        sa.Column('enable_attachments', sa.Boolean(), nullable=False, server_default='true'),
-        sa.Column('enable_likes', sa.Boolean(), nullable=False, server_default='true'),
-        sa.Column('enable_comments', sa.Boolean(), nullable=False, server_default='true'),
-        sa.Column('settings', postgresql.JSON(astext_type=sa.Text()), nullable=True),
-        sa.Column('display_order', sa.Integer(), nullable=False, server_default='0'),
-        sa.Column('total_posts', sa.Integer(), nullable=False, server_default='0'),
-        sa.Column('total_comments', sa.Integer(), nullable=False, server_default='0'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column('created_by', sa.String(100), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column('updated_by', sa.String(100), nullable=True),
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
-        sa.Column('is_deleted', sa.Boolean(), nullable=False, server_default='false'),
-        sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('tenant_id', 'board_code', name='uk_tenant_board_code'),
-    )
-    op.create_index('idx_tenant_id', 'boards', ['tenant_id'])
-    op.create_index('idx_board_code', 'boards', ['board_code'])
-    op.create_index('idx_board_type', 'boards', ['board_type'])
-    op.create_index('idx_display_order', 'boards', ['display_order'])
+    Note: boards table is already created in 001_create_shared_schema with full features
+    """
 
     # Create board_categories table
     op.create_table(
@@ -85,11 +49,11 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['board_id'], ['boards.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('board_id', 'category_code', name='uk_board_category_code'),
+        sa.UniqueConstraint('board_id', 'category_code', name='uk_bcats_board_category_code'),
     )
-    op.create_index('idx_board_id', 'board_categories', ['board_id'])
-    op.create_index('idx_tenant_id', 'board_categories', ['tenant_id'])
-    op.create_index('idx_display_order', 'board_categories', ['display_order'])
+    op.create_index('idx_bcats_board_id', 'board_categories', ['board_id'])
+    op.create_index('idx_bcats_tenant_id', 'board_categories', ['tenant_id'])
+    op.create_index('idx_bcats_display_order', 'board_categories', ['display_order'])
 
     # Create board_posts table
     op.create_table(
@@ -111,7 +75,7 @@ def upgrade() -> None:
         sa.Column('view_count', sa.Integer(), nullable=False, server_default='0'),
         sa.Column('like_count', sa.Integer(), nullable=False, server_default='0'),
         sa.Column('comment_count', sa.Integer(), nullable=False, server_default='0'),
-        sa.Column('metadata', postgresql.JSON(astext_type=sa.Text()), nullable=True),
+        sa.Column('post_metadata', postgresql.JSON(astext_type=sa.Text()), nullable=True),
         sa.Column('published_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column('created_by', sa.String(100), nullable=True),
@@ -125,15 +89,15 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['author_id'], ['users.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id'),
     )
-    op.create_index('idx_board_id', 'board_posts', ['board_id'])
-    op.create_index('idx_tenant_id', 'board_posts', ['tenant_id'])
-    op.create_index('idx_category_id', 'board_posts', ['category_id'])
-    op.create_index('idx_author_id', 'board_posts', ['author_id'])
-    op.create_index('idx_status', 'board_posts', ['status'])
-    op.create_index('idx_created_at', 'board_posts', ['created_at'])
-    op.create_index('idx_is_pinned', 'board_posts', ['is_pinned'])
-    op.create_index('idx_is_notice', 'board_posts', ['is_notice'])
-    op.create_index('idx_board_status_created', 'board_posts', ['board_id', 'status', 'created_at'])
+    op.create_index('idx_posts_board_id', 'board_posts', ['board_id'])
+    op.create_index('idx_posts_tenant_id', 'board_posts', ['tenant_id'])
+    op.create_index('idx_posts_category_id', 'board_posts', ['category_id'])
+    op.create_index('idx_posts_author_id', 'board_posts', ['author_id'])
+    op.create_index('idx_posts_status', 'board_posts', ['status'])
+    op.create_index('idx_posts_created_at', 'board_posts', ['created_at'])
+    op.create_index('idx_posts_is_pinned', 'board_posts', ['is_pinned'])
+    op.create_index('idx_posts_is_notice', 'board_posts', ['is_notice'])
+    op.create_index('idx_posts_board_status_created', 'board_posts', ['board_id', 'status', 'created_at'])
 
     # Create board_comments table
     op.create_table(
@@ -160,12 +124,12 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['parent_id'], ['board_comments.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id'),
     )
-    op.create_index('idx_post_id', 'board_comments', ['post_id'])
-    op.create_index('idx_tenant_id', 'board_comments', ['tenant_id'])
-    op.create_index('idx_author_id', 'board_comments', ['author_id'])
-    op.create_index('idx_parent_id', 'board_comments', ['parent_id'])
-    op.create_index('idx_status', 'board_comments', ['status'])
-    op.create_index('idx_created_at', 'board_comments', ['created_at'])
+    op.create_index('idx_comments_post_id', 'board_comments', ['post_id'])
+    op.create_index('idx_comments_tenant_id', 'board_comments', ['tenant_id'])
+    op.create_index('idx_comments_author_id', 'board_comments', ['author_id'])
+    op.create_index('idx_comments_parent_id', 'board_comments', ['parent_id'])
+    op.create_index('idx_comments_status', 'board_comments', ['status'])
+    op.create_index('idx_comments_created_at', 'board_comments', ['created_at'])
 
     # Create board_attachments table
     op.create_table(
@@ -196,10 +160,10 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['uploader_id'], ['users.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id'),
     )
-    op.create_index('idx_post_id', 'board_attachments', ['post_id'])
-    op.create_index('idx_tenant_id', 'board_attachments', ['tenant_id'])
-    op.create_index('idx_uploader_id', 'board_attachments', ['uploader_id'])
-    op.create_index('idx_is_image', 'board_attachments', ['is_image'])
+    op.create_index('idx_attach_post_id', 'board_attachments', ['post_id'])
+    op.create_index('idx_attach_tenant_id', 'board_attachments', ['tenant_id'])
+    op.create_index('idx_attach_uploader_id', 'board_attachments', ['uploader_id'])
+    op.create_index('idx_attach_is_image', 'board_attachments', ['is_image'])
 
     # Create board_likes table
     op.create_table(
@@ -215,37 +179,15 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('post_id', 'user_id', name='uk_post_user_like'),
     )
-    op.create_index('idx_post_id', 'board_likes', ['post_id'])
-    op.create_index('idx_tenant_id', 'board_likes', ['tenant_id'])
-    op.create_index('idx_user_id', 'board_likes', ['user_id'])
+    op.create_index('idx_likes_post_id', 'board_likes', ['post_id'])
+    op.create_index('idx_likes_tenant_id', 'board_likes', ['tenant_id'])
+    op.create_index('idx_likes_user_id', 'board_likes', ['user_id'])
 
 
 def downgrade() -> None:
-    """Drop board-related tables"""
+    """Drop board-related tables (except boards which is in 001)"""
     op.drop_table('board_likes')
     op.drop_table('board_attachments')
     op.drop_table('board_comments')
     op.drop_table('board_posts')
     op.drop_table('board_categories')
-    op.drop_table('boards')
-
-    # Recreate placeholder boards table
-    op.create_table(
-        'boards',
-        sa.Column('id', sa.BigInteger(), nullable=False),
-        sa.Column('tenant_id', sa.BigInteger(), nullable=False),
-        sa.Column('board_name', sa.String(100), nullable=False),
-        sa.Column('board_code', sa.String(50), nullable=False),
-        sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column('created_by', sa.String(100), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column('updated_by', sa.String(100), nullable=True),
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
-        sa.Column('is_deleted', sa.Boolean(), nullable=False, server_default='false'),
-        sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('tenant_id', 'board_code', name='uk_tenant_board_code'),
-    )
-    op.create_index('idx_tenant_id', 'boards', ['tenant_id'])
-    op.create_index('idx_board_code', 'boards', ['board_code'])

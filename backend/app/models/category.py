@@ -127,16 +127,17 @@ class Category(Base):
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Self-referential relationship for parent-child
-    children = relationship(
-        "Category",
-        back_populates="parent",
-        remote_side=[id],
-        cascade="all, delete-orphan"
-    )
     parent = relationship(
         "Category",
         back_populates="children",
-        remote_side=[parent_id]
+        remote_side="Category.id",
+        foreign_keys=[parent_id]
+    )
+    children = relationship(
+        "Category",
+        back_populates="parent",
+        cascade="all, delete-orphan",
+        foreign_keys="Category.parent_id"
     )
 
     # Indexes

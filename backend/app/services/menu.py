@@ -344,7 +344,7 @@ class MenuService:
                 permission_type=menu_data.permission_type,
                 is_visible=menu_data.is_visible,
                 is_active=menu_data.is_active,
-                metadata=menu_data.metadata,
+                menu_metadata=menu_data.metadata,
                 created_by=current_user.username,
                 updated_by=current_user.username
             )

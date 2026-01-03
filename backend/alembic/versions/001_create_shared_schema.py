@@ -48,7 +48,7 @@ def upgrade() -> None:
     op.create_index('idx_tenant_code', 'tenants', ['tenant_code'])
     op.create_index('idx_domain', 'tenants', ['domain'])
     op.create_index('idx_subdomain', 'tenants', ['subdomain'])
-    op.create_index('idx_status', 'tenants', ['status'])
+    op.create_index('idx_tenants_status', 'tenants', ['status'])
 
     # Create users table
     op.create_table(
@@ -78,9 +78,9 @@ def upgrade() -> None:
         sa.UniqueConstraint('tenant_id', 'username', name='uk_tenant_username'),
         sa.UniqueConstraint('tenant_id', 'email', name='uk_tenant_email'),
     )
-    op.create_index('idx_tenant_id', 'users', ['tenant_id'])
-    op.create_index('idx_email', 'users', ['email'])
-    op.create_index('idx_status', 'users', ['status'])
+    op.create_index('idx_users_tenant_id', 'users', ['tenant_id'])
+    op.create_index('idx_users_email', 'users', ['email'])
+    op.create_index('idx_users_status', 'users', ['status'])
 
     # Create user_groups table
     op.create_table(
@@ -102,9 +102,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('tenant_id', 'group_code', name='uk_tenant_group_code'),
     )
-    op.create_index('idx_tenant_id', 'user_groups', ['tenant_id'])
-    op.create_index('idx_group_code', 'user_groups', ['group_code'])
-    op.create_index('idx_priority', 'user_groups', ['priority'])
+    op.create_index('idx_ugroups_tenant_id', 'user_groups', ['tenant_id'])
+    op.create_index('idx_ugroups_group_code', 'user_groups', ['group_code'])
+    op.create_index('idx_ugroups_priority', 'user_groups', ['priority'])
 
     # Create user_group_members table
     op.create_table(
@@ -119,8 +119,8 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('user_id', 'group_id', name='uk_user_group'),
     )
-    op.create_index('idx_user_id', 'user_group_members', ['user_id'])
-    op.create_index('idx_group_id', 'user_group_members', ['group_id'])
+    op.create_index('idx_ugmembers_user_id', 'user_group_members', ['user_id'])
+    op.create_index('idx_ugmembers_group_id', 'user_group_members', ['group_id'])
 
     # Create roles table
     op.create_table(
@@ -140,8 +140,8 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('role_code', name='uq_roles_role_code'),
     )
-    op.create_index('idx_role_code', 'roles', ['role_code'])
-    op.create_index('idx_priority', 'roles', ['priority'])
+    op.create_index('idx_roles_role_code', 'roles', ['role_code'])
+    op.create_index('idx_roles_priority', 'roles', ['priority'])
 
     # Create user_roles table
     op.create_table(
@@ -156,8 +156,8 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('user_id', 'role_id', name='uk_user_role'),
     )
-    op.create_index('idx_user_id', 'user_roles', ['user_id'])
-    op.create_index('idx_role_id', 'user_roles', ['role_id'])
+    op.create_index('idx_uroles_user_id', 'user_roles', ['user_id'])
+    op.create_index('idx_uroles_role_id', 'user_roles', ['role_id'])
 
     # Create permissions table
     op.create_table(
@@ -177,8 +177,8 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('permission_code', name='uq_permissions_permission_code'),
     )
-    op.create_index('idx_permission_code', 'permissions', ['permission_code'])
-    op.create_index('idx_resource_action', 'permissions', ['resource', 'action'])
+    op.create_index('idx_perms_permission_code', 'permissions', ['permission_code'])
+    op.create_index('idx_perms_resource_action', 'permissions', ['resource', 'action'])
 
     # Create role_permissions table
     op.create_table(
@@ -193,8 +193,8 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('role_id', 'permission_id', name='uk_role_permission'),
     )
-    op.create_index('idx_role_id', 'role_permissions', ['role_id'])
-    op.create_index('idx_permission_id', 'role_permissions', ['permission_id'])
+    op.create_index('idx_roleperms_role_id', 'role_permissions', ['role_id'])
+    op.create_index('idx_roleperms_permission_id', 'role_permissions', ['permission_id'])
 
     # Create menus table
     op.create_table(
@@ -218,11 +218,11 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('tenant_id', 'menu_code', name='uk_tenant_menu_code'),
     )
-    op.create_index('idx_tenant_id', 'menus', ['tenant_id'])
-    op.create_index('idx_menu_code', 'menus', ['menu_code'])
-    op.create_index('idx_display_order', 'menus', ['display_order'])
+    op.create_index('idx_menus_tenant_id', 'menus', ['tenant_id'])
+    op.create_index('idx_menus_menu_code', 'menus', ['menu_code'])
+    op.create_index('idx_menus_display_order', 'menus', ['display_order'])
 
-    # Create boards table
+    # Create extended boards table with all features
     op.create_table(
         'boards',
         sa.Column('id', sa.BigInteger(), nullable=False),
@@ -230,6 +230,19 @@ def upgrade() -> None:
         sa.Column('board_name', sa.String(100), nullable=False),
         sa.Column('board_code', sa.String(50), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
+        sa.Column('board_type', postgresql.ENUM('notice', 'free', 'qna', 'faq', 'gallery', 'review', name='boardtypeenum', create_type=True), nullable=False, server_default='free'),
+        sa.Column('read_permission', postgresql.ENUM('public', 'member', 'admin', 'disabled', name='permissionlevelenum', create_type=True), nullable=False, server_default='public'),
+        sa.Column('write_permission', sa.Enum('public', 'member', 'admin', 'disabled', name='permissionlevelenum'), nullable=False, server_default='member'),
+        sa.Column('comment_permission', sa.Enum('public', 'member', 'admin', 'disabled', name='permissionlevelenum'), nullable=False, server_default='member'),
+        sa.Column('enable_categories', sa.Boolean(), nullable=False, server_default='true'),
+        sa.Column('enable_secret_post', sa.Boolean(), nullable=False, server_default='false'),
+        sa.Column('enable_attachments', sa.Boolean(), nullable=False, server_default='true'),
+        sa.Column('enable_likes', sa.Boolean(), nullable=False, server_default='true'),
+        sa.Column('enable_comments', sa.Boolean(), nullable=False, server_default='true'),
+        sa.Column('settings', postgresql.JSON(astext_type=sa.Text()), nullable=True),
+        sa.Column('display_order', sa.Integer(), nullable=False, server_default='0'),
+        sa.Column('total_posts', sa.Integer(), nullable=False, server_default='0'),
+        sa.Column('total_comments', sa.Integer(), nullable=False, server_default='0'),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column('created_by', sa.String(100), nullable=True),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
@@ -240,8 +253,10 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('tenant_id', 'board_code', name='uk_tenant_board_code'),
     )
-    op.create_index('idx_tenant_id', 'boards', ['tenant_id'])
-    op.create_index('idx_board_code', 'boards', ['board_code'])
+    op.create_index('idx_boards_tenant_id', 'boards', ['tenant_id'])
+    op.create_index('idx_boards_board_code', 'boards', ['board_code'])
+    op.create_index('idx_boards_board_type', 'boards', ['board_type'])
+    op.create_index('idx_boards_display_order', 'boards', ['display_order'])
 
 
 def downgrade() -> None:

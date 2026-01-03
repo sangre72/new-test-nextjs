@@ -51,13 +51,13 @@ def upgrade() -> None:
         sa.UniqueConstraint('board_id', 'category_code', name='uk_board_category_code'),
     )
 
-    op.create_index('idx_tenant_id', 'categories', ['tenant_id'])
-    op.create_index('idx_board_id', 'categories', ['board_id'])
-    op.create_index('idx_parent_id', 'categories', ['parent_id'])
-    op.create_index('idx_sort_order', 'categories', ['sort_order'])
-    op.create_index('idx_path', 'categories', ['path'])
-    op.create_index('idx_is_active', 'categories', ['is_active'])
-    op.create_index('idx_is_deleted', 'categories', ['is_deleted'])
+    op.create_index('idx_cats_tenant_id', 'categories', ['tenant_id'])
+    op.create_index('idx_cats_board_id', 'categories', ['board_id'])
+    op.create_index('idx_cats_parent_id', 'categories', ['parent_id'])
+    op.create_index('idx_cats_sort_order', 'categories', ['sort_order'])
+    op.create_index('idx_cats_path', 'categories', ['path'])
+    op.create_index('idx_cats_is_active', 'categories', ['is_active'])
+    op.create_index('idx_cats_is_deleted', 'categories', ['is_deleted'])
 
 
 def downgrade() -> None:
