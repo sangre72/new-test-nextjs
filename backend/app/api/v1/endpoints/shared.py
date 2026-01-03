@@ -3,7 +3,7 @@ API Endpoints for Shared Models
 Includes CRUD operations for tenants, users, roles, permissions, etc.
 """
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.shared import (
@@ -22,6 +22,8 @@ from app.services.shared import (
     TenantService, UserService, UserGroupService, RoleService,
     PermissionService, UserRoleService, MenuService, BoardService
 )
+from app.api.tenant_middleware import TenantContext
+from app.api.deps import get_current_tenant
 
 router = APIRouter()
 
@@ -105,6 +107,23 @@ def delete_tenant(
     service = TenantService(db)
     if not service.delete(tenant_id):
         raise HTTPException(status_code=404, detail="Tenant not found")
+
+
+@router.get("/tenants/current/info", response_model=dict, tags=["Tenants"])
+def get_current_tenant_info(
+    request: Request,
+    current_tenant: TenantContext = Depends(get_current_tenant)
+):
+    """
+    Get current tenant information from request context
+    This is populated by the tenant middleware
+    """
+    return {
+        "tenant_id": current_tenant.tenant_id,
+        "tenant_code": current_tenant.tenant_code,
+        "tenant_name": current_tenant.tenant_name,
+        "settings": current_tenant.settings,
+    }
 
 
 # ==================== User Endpoints ====================
